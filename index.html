@@ -149,7 +149,19 @@ main#stage{position:relative;flex:1;min-height:0;background:#fff}
 #gSub button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 </style>
 </head>
-<body><div id="erp-user-bar">...</div>
+<body><div id="erp-user-bar"></div><div id="erp-user-bar" style="background:#f8fafc;border-bottom:1px solid #cbd5e1;padding:8px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-family:sans-serif;font-size:14px;">
+  <strong>ผู้ใช้งาน ERP:</strong>
+  <input id="erp-user-name" type="text" placeholder="กรอกรหัส / ชื่อพนักงาน" style="padding:4px 8px;border:1px solid #94a3b8;border-radius:4px;" />
+  <select id="erp-user-role" style="padding:4px 8px;border:1px solid #94a3b8;border-radius:4px;">
+    <option value="ผู้บันทึก">ผู้บันทึก</option>
+    <option value="ช่างซ่อม">ช่างซ่อม</option>
+    <option value="หัวหน้าช่าง">หัวหน้าช่าง</option>
+    <option value="ผู้ตรวจสอบ">ผู้ตรวจสอบ</option>
+    <option value="ผู้อนุมัติ">ผู้อนุมัติ</option>
+  </select>
+  <button id="erp-save-user-btn" type="button" style="padding:4px 12px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;">บันทึกผู้ใช้งาน</button>
+  <span id="erp-sync-status" style="margin-left:auto;color:#64748b;font-size:13px;">กำลังเชื่อมต่อ Firebase...</span>
+</div>
 <header>
   <div class="brand">
     <div class="logo">🚚</div>
