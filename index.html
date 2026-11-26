@@ -13017,7 +13017,7 @@ window.addEventListener('storage',function(){if(pane.classList.contains('on'))re
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getDatabase, onValue, push, ref, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, onValue, push, ref, remove, serverTimestamp, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
@@ -13031,6 +13031,7 @@ const firebaseConfig = {
   measurementId: "G-65WJX7PFC3"
 };
 const LOG_PATH = "garage18w/access_logs";
+const ERP_PATH = "garage18w/erp_data";
 const form = document.getElementById("authForm");
 const submitButton = document.getElementById("authSubmit");
 const errorBox = document.getElementById("authError");
@@ -13041,6 +13042,192 @@ let auth = null;
 let db = null;
 let stopHistoryListener = null;
 let statusTimer = null;
+let stopErpListener = null;
+let erpScanTimer = null;
+let erpSyncReady = false;
+let erpRemoteState = new Map();
+let erpLocalState = new Map();
+let erpRetryAt = new Map();
+const erpWriterId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+function isErpStorageKey(key) {
+  return !!key && key.indexOf("pgs_presence_") !== 0 && key.indexOf("firebase:") !== 0;
+}
+
+function readErpLocalStorage() {
+  const entries = new Map();
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (isErpStorageKey(key)) entries.set(key, localStorage.getItem(key));
+  }
+  return entries;
+}
+
+function erpStorageRef(key) {
+  const safeKey = "k_" + encodeURIComponent(key).replace(/\./g, "%2E");
+  return ref(db, ERP_PATH + "/" + safeKey);
+}
+
+function reportErpSyncError(error) {
+  console.error("Firebase ERP sync failed", error);
+  const status = document.getElementById("authSyncStatus");
+  status.textContent = "ซิงก์ ERP ไม่สำเร็จ";
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(function () { status.textContent = ""; }, 6000);
+}
+
+async function writeErpValue(key, value) {
+  try {
+    await set(erpStorageRef(key), {
+      key: key,
+      value: value,
+      updatedAt: serverTimestamp(),
+      updatedBy: auth.currentUser ? auth.currentUser.uid : "",
+      writer: erpWriterId
+    });
+    erpRetryAt.delete(key);
+    return true;
+  } catch (error) {
+    erpRetryAt.set(key, Date.now() + 5000);
+    if (erpLocalState.get(key) === value) erpLocalState.delete(key);
+    reportErpSyncError(error);
+    return false;
+  }
+}
+
+async function removeErpValue(key) {
+  try {
+    await remove(erpStorageRef(key));
+    erpRemoteState.delete(key);
+    erpLocalState.delete(key);
+    erpRetryAt.delete(key);
+    return true;
+  } catch (error) {
+    erpRetryAt.set(key, Date.now() + 5000);
+    reportErpSyncError(error);
+    return false;
+  }
+}
+
+function applyErpSnapshot(snapshot) {
+  const nextRemote = new Map();
+  snapshot.forEach(function (child) {
+    const record = child.val();
+    if (record && typeof record.key === "string" && typeof record.value === "string") {
+      nextRemote.set(record.key, record.value);
+    }
+  });
+
+  if (!erpSyncReady) {
+    const localBeforeSync = readErpLocalStorage();
+    nextRemote.forEach(function (value, key) {
+      try {
+        localStorage.setItem(key, value);
+      } catch (error) {
+        reportErpSyncError(error);
+      }
+    });
+    erpRemoteState = nextRemote;
+    erpLocalState = readErpLocalStorage();
+    erpSyncReady = true;
+    const uploads = [];
+    localBeforeSync.forEach(function (value, key) {
+      if (!nextRemote.has(key)) uploads.push(writeErpValue(key, value));
+    });
+    Promise.all(uploads).then(function (results) {
+      if (results.every(Boolean) && auth && auth.currentUser && erpSyncReady) {
+        document.getElementById("authSyncStatus").textContent = "ERP ซิงก์แล้ว";
+      }
+    });
+    return;
+  }
+
+  nextRemote.forEach(function (value, key) {
+    if (!erpRemoteState.has(key) || erpRemoteState.get(key) !== value) {
+      try {
+        localStorage.setItem(key, value);
+        erpLocalState.set(key, value);
+      } catch (error) {
+        reportErpSyncError(error);
+      }
+    }
+  });
+  erpRemoteState.forEach(function (value, key) {
+    if (nextRemote.has(key)) return;
+    try {
+      const localValue = localStorage.getItem(key);
+      if (localValue !== null && (!erpLocalState.has(key) || localValue !== erpLocalState.get(key))) return;
+      localStorage.removeItem(key);
+      erpLocalState.delete(key);
+    } catch (error) {
+      reportErpSyncError(error);
+    }
+  });
+  erpRemoteState = nextRemote;
+}
+
+function scanErpLocalStorage() {
+  if (!erpSyncReady || !auth || !auth.currentUser) return;
+  let localEntries;
+  try {
+    localEntries = readErpLocalStorage();
+  } catch (error) {
+    reportErpSyncError(error);
+    return;
+  }
+  const now = Date.now();
+  localEntries.forEach(function (value, key) {
+    const changed = !erpLocalState.has(key) || erpLocalState.get(key) !== value;
+    if (changed) {
+      erpLocalState.set(key, value);
+    }
+    if ((changed || erpRetryAt.has(key)) && erpRemoteState.get(key) !== value && (!erpRetryAt.has(key) || now >= erpRetryAt.get(key))) {
+      void writeErpValue(key, value);
+    }
+  });
+  Array.from(erpLocalState.keys()).forEach(function (key) {
+    if (localEntries.has(key)) return;
+    const pendingDelete = erpLocalState.get(key) === null;
+    if (!pendingDelete) erpLocalState.set(key, null);
+    if (!erpRemoteState.has(key)) {
+      erpLocalState.delete(key);
+    } else if (!erpRetryAt.has(key) || now >= erpRetryAt.get(key)) {
+      void removeErpValue(key);
+    }
+  });
+}
+
+function stopErpSync() {
+  window.removeEventListener("storage", scanErpLocalStorage);
+  if (stopErpListener) {
+    stopErpListener();
+    stopErpListener = null;
+  }
+  if (erpScanTimer) {
+    clearInterval(erpScanTimer);
+    erpScanTimer = null;
+  }
+  erpSyncReady = false;
+  erpRemoteState = new Map();
+  erpLocalState = new Map();
+  erpRetryAt = new Map();
+}
+
+function startErpSync() {
+  stopErpSync();
+  document.getElementById("authSyncStatus").textContent = "กำลังซิงก์ ERP...";
+  stopErpListener = onValue(ref(db, ERP_PATH), function (snapshot) {
+    try {
+      applyErpSnapshot(snapshot);
+    } catch (error) {
+      reportErpSyncError(error);
+    }
+  }, function (error) {
+    reportErpSyncError(error);
+  });
+  erpScanTimer = setInterval(scanErpLocalStorage, 500);
+  window.addEventListener("storage", scanErpLocalStorage);
+}
 
 function setAuthError(message) {
   errorBox.textContent = message || "";
@@ -13210,7 +13397,9 @@ try {
       showUser(user);
       setAuthError("");
       document.body.classList.add("auth-ok");
+      startErpSync();
     } else {
+      stopErpSync();
       window.hideAuthHistory();
       document.getElementById("authDisplayName").textContent = "";
       document.getElementById("authDisplayRole").textContent = "";
