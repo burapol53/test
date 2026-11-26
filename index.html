@@ -12956,6 +12956,125 @@ inG=document.getElementById('tbGarage').classList.contains('on');apply();
 window.addEventListener('storage',function(){if(pane.classList.contains('on'))render()});
 })();
 </script>
-<script type="module"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+  import {
+    getDatabase,
+    ref,
+    set,
+    push,
+    onValue
+  } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBpq37x6l-Wh4c6vB5-kCeXAhlwB6FaYCA",
+    authDomain: "pyt5-69582.firebaseapp.com",
+    databaseURL: "https://pyt5-69582-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "pyt5-69582",
+    storageBucket: "pyt5-69582.firebasestorage.app",
+    messagingSenderId: "289041836844",
+    appId: "1:289041836844:web:e1d4fe68c2bdb226bc5a89",
+    measurementId: "G-YWHBYW8XQV"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  const USER_STORAGE_KEY = "sg18w_erp_current_user";
+  const nameInput = document.getElementById("erp-user-name");
+  const roleSelect = document.getElementById("erp-user-role");
+  const saveUserBtn = document.getElementById("erp-save-user-btn");
+  const statusEl = document.getElementById("erp-sync-status");
+
+  function loadCurrentUser() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(USER_STORAGE_KEY) || "null");
+      if (saved) {
+        if (nameInput && saved.name) nameInput.value = saved.name;
+        if (roleSelect && saved.role) roleSelect.value = saved.role;
+        return saved;
+      }
+    } catch (e) {}
+    return { name: "", role: "ผู้บันทึก" };
+  }
+
+  function getCurrentUser() {
+    const name = (nameInput?.value || "").trim();
+    const role = roleSelect?.value || "ผู้บันทึก";
+    return { name, role };
+  }
+
+  saveUserBtn?.addEventListener("click", () => {
+    const user = getCurrentUser();
+    if (!user.name) {
+      alert("กรุณากรอกรหัสหรือชื่อผู้ใช้งานก่อนครับ");
+      nameInput?.focus();
+      return;
+    }
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    alert(`บันทึกผู้ใช้งานเรียบร้อย: ${user.name} (${user.role})`);
+  });
+
+  loadCurrentUser();
+
+  window.erpSaveRecord = async function (recordId, payload, actionLabel = "บันทึก/อัปเดตข้อมูล") {
+    const user = getCurrentUser();
+    if (!user.name) {
+      alert("กรุณากรอกรหัสหรือชื่อผู้ใช้งานที่แถบด้านบนก่อนบันทึกข้อมูลครับ");
+      nameInput?.focus();
+      return false;
+    }
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+
+    const nowIso = new Date().toISOString();
+    const cleanId = String(recordId || `REC-${Date.now()}`).replace(/[.#$/[\]]/g, "_");
+
+    const enrichedData = {
+      ...payload,
+      updatedAt: nowIso,
+      updatedBy: user.name,
+      updatedRole: user.role
+    };
+
+    await set(ref(db, `smartGarage18w/records/${cleanId}`), enrichedData);
+
+    await push(ref(db, "smartGarage18w/auditLogs"), {
+      recordId: cleanId,
+      action: actionLabel,
+      userName: user.name,
+      userRole: user.role,
+      timestamp: nowIso,
+      userAgent: navigator.userAgent
+    });
+
+    return true;
+  };
+
+  window.erpSubscribeRecords = function (callback) {
+    const recordsRef = ref(db, "smartGarage18w/records");
+    onValue(
+      recordsRef,
+      (snapshot) => {
+        if (statusEl) {
+          statusEl.textContent = "เชื่อมต่อ Firebase แล้ว (ซิงค์เรียลไทม์)";
+          statusEl.style.color = "#15803d";
+        }
+        const val = snapshot.val() || {};
+        if (typeof callback === "function") callback(val);
+      },
+      (error) => {
+        if (statusEl) {
+          statusEl.textContent = `เชื่อมต่อฐานข้อมูลไม่สำเร็จ: ${error.message}`;
+          statusEl.style.color = "#b91c1c";
+        }
+      }
+    );
+  };
+
+  window.erpSubscribeRecords((records) => {
+    window.__SG18W_CLOUD_RECORDS__ = records;
+    window.dispatchEvent(new CustomEvent("sg18w:records-updated", { detail: records }));
+  });
+</script>
 </body>
 </html>
