@@ -93,6 +93,35 @@ main#stage{position:relative;flex:1;min-height:0;background:#fff}
   .tools{margin-left:auto}
   .chip{padding:0 9px}
 }
+#authScreen{position:fixed;inset:0;z-index:100;display:grid;place-items:center;overflow:auto;padding:20px;background:linear-gradient(135deg,#fff1f2,#fee2e2)}
+#authCard{width:min(420px,100%);background:#fff;border:1px solid #fecaca;border-radius:18px;padding:26px;box-shadow:0 18px 50px #7f1d1d24}
+#authCard h1{margin:0 0 6px;color:#991b1b;font-size:22px}
+#authCard p{margin:0 0 20px;color:#64748b;font-size:13px}
+#authForm label{display:flex;flex-direction:column;gap:6px;margin:12px 0;color:#475569;font-size:13px;font-weight:600}
+#authForm input{height:42px;border:1px solid #fecaca;border-radius:10px;padding:0 12px;font:inherit;color:#1e293b}
+#authForm input:focus{outline:2px solid #b91c1c33;border-color:#b91c1c}
+#authForm button,#authHistoryClose{height:40px;border:0;border-radius:10px;background:#b91c1c;color:#fff;font:inherit;font-weight:700;cursor:pointer}
+#authForm button{width:100%;margin-top:8px}
+#authForm button:disabled{opacity:.6;cursor:wait}
+#authForm button:hover,#authHistoryClose:hover{background:#991b1b}
+#authHint{margin-top:14px!important;padding:10px 12px;border:1px solid #fecaca;border-radius:10px;background:#fff8f8;color:#64748b!important;font-size:12px!important;line-height:1.7}
+#authError{min-height:20px;margin-top:10px;color:#dc2626;font-size:12px}
+body:not(.auth-ok)>:not(#authScreen):not(script){visibility:hidden!important;pointer-events:none!important}
+body.auth-ok #authScreen{display:none}
+#authIdentity{display:flex;flex-direction:column;justify-content:center;min-width:105px;color:#fff;line-height:1.35}
+#authIdentity b{font-size:12px}
+#authIdentity small{font-size:10.5px;opacity:.8}
+#authHistory{position:fixed;inset:0;z-index:40;display:none;place-items:center;padding:16px;background:#0b1d2e88}
+#authHistory.on{display:grid}
+#authHistoryBox{width:min(900px,100%);max-height:min(80vh,700px);overflow:auto;background:#fff;border-radius:14px;padding:16px;box-shadow:0 18px 50px #0005}
+#authHistoryHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+#authHistoryHead h2{margin:0;color:#991b1b;font-size:17px}
+#authHistoryClose{height:34px;padding:0 14px}
+#authHistory table{width:100%;border-collapse:collapse;font-size:12.5px}
+#authHistory th,#authHistory td{padding:9px 8px;border-bottom:1px solid #fee2e2;text-align:left;vertical-align:top}
+#authHistory th{position:sticky;top:0;background:#fff8f8;color:#64748b;white-space:nowrap}
+#authHistoryEmpty{text-align:center;color:#64748b;padding:24px}
+@media(max-width:860px){#authIdentity{min-width:0}.auth-action{font-size:11px!important;padding:0 8px!important}}
 </style>
 <style>
 #dashPane{position:absolute;inset:0;display:none;overflow:auto;background:var(--bg);padding:14px;z-index:1}
@@ -149,30 +178,20 @@ main#stage{position:relative;flex:1;min-height:0;background:#fff}
 #gSub button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 </style>
 </head>
-<div id="erp-login-overlay" style="position:fixed;inset:0;background:rgba(15,23,42,0.88);z-index:9999;display:flex;align-items:center;justify-content:center;font-family:sans-serif;padding:16px;">
-  <div style="background:#fff;padding:24px;border-radius:12px;width:100%;max-width:360px;box-shadow:0 10px 25px rgba(0,0,0,0.3);">
-    <h3 style="margin:0 0 6px;color:#0f172a;text-align:center;">SMART GARAGE 18W</h3>
-    <p style="margin:0 0 16px;color:#64748b;font-size:13px;text-align:center;">เข้าสู่ระบบเพื่อบันทึกและตรวจสอบข้อมูลอู่</p>
-    <div style="margin-bottom:12px;">
-      <label style="display:block;font-size:13px;margin-bottom:4px;color:#334155;">อีเมลผู้ใช้งาน</label>
-      <input id="login-email" type="email" placeholder="เช่น techpyt@prayuk.com" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;" />
-    </div>
-    <div style="margin-bottom:16px;">
-      <label style="display:block;font-size:13px;margin-bottom:4px;color:#334155;">รหัสผ่าน</label>
-      <input id="login-pass" type="password" placeholder="••••••••" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;" />
-    </div>
-    <button id="login-submit-btn" type="button" style="width:100%;padding:10px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;font-weight:bold;font-size:14px;cursor:pointer;">เข้าสู่ระบบ</button>
-    <p id="login-error-msg" style="color:#dc2626;font-size:13px;margin:10px 0 0;text-align:center;min-height:18px;"></p>
+<body>
+<section id="authScreen" aria-label="เข้าสู่ระบบ">
+  <div id="authCard">
+    <h1>เข้าสู่ระบบ GARAGE SERVICE</h1>
+    <p>กรุณาเข้าสู่ระบบเพื่อใช้งานระบบ ERP</p>
+    <form id="authForm">
+      <label>อีเมล<input id="authEmail" name="email" type="email" autocomplete="email" required autofocus></label>
+      <label>รหัสผ่าน<input id="authPassword" name="password" type="password" autocomplete="current-password" required></label>
+      <button id="authSubmit" type="submit" disabled>กำลังเชื่อมต่อ Firebase...</button>
+      <div id="authError" role="alert" aria-live="polite"></div>
+    </form>
+    <p id="authHint">ใช้บัญชี Email/Password ที่เปิดใช้งานใน Firebase Authentication</p>
   </div>
-</div>
-
-<div id="erp-user-bar" style="background:#f8fafc;border-bottom:1px solid #cbd5e1;padding:8px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-family:sans-serif;font-size:14px;">
-  <strong>ผู้ใช้งาน ERP:</strong>
-  <input id="erp-user-name" type="text" readonly placeholder="ยังไม่ได้เข้าสู่ระบบ" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:4px;background:#e2e8f0;color:#0f172a;font-weight:bold;min-width:190px;" />
-  <span id="erp-user-role-badge" style="padding:4px 10px;background:#dbeafe;color:#1e40af;border-radius:999px;font-size:12px;font-weight:bold;">-</span>
-  <button id="erp-logout-btn" type="button" style="padding:4px 10px;background:#ef4444;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;">ออกจากระบบ</button>
-  <span id="erp-sync-status" style="margin-left:auto;color:#64748b;font-size:13px;">กำลังเชื่อมต่อ Firebase...</span>
-</div>
+</section>
 <header>
   <div class="brand">
     <div class="logo">🚚</div>
@@ -192,6 +211,9 @@ main#stage{position:relative;flex:1;min-height:0;background:#fff}
       🔔<span class="badge hidden" id="bellBadge">0</span>
     </button>
     <button class="iconbtn" onclick="openCfg()" title="ตั้งค่าการเชื่อมต่อ">⚙️</button>
+    <div id="authIdentity" aria-live="polite"><b id="authDisplayName"></b><small id="authDisplayRole"></small><small id="authSyncStatus" role="status"></small></div>
+    <button class="chip auth-action" type="button" onclick="showAuthHistory()">ประวัติ</button>
+    <button class="chip auth-action" type="button" onclick="logoutUser()">ออกจากระบบ</button>
   </div>
 </header>
 
@@ -227,6 +249,19 @@ main#stage{position:relative;flex:1;min-height:0;background:#fff}
 </div>
 
 <div id="toast"></div>
+
+<div id="authHistory" role="dialog" aria-modal="true" aria-labelledby="authHistoryTitle" onclick="if(event.target===this)hideAuthHistory()">
+  <div id="authHistoryBox">
+    <div id="authHistoryHead"><h2 id="authHistoryTitle">ประวัติการเข้าใช้งาน</h2><button id="authHistoryClose" type="button" onclick="hideAuthHistory()">ปิด</button></div>
+    <div style="overflow:auto">
+      <table>
+        <thead><tr><th>วัน-เวลา (ไทย)</th><th>อีเมล</th><th>กิจกรรม</th></tr></thead>
+        <tbody id="authHistoryRows"></tbody>
+      </table>
+      <div id="authHistoryEmpty" class="hidden">ยังไม่มีประวัติการใช้งาน</div>
+    </div>
+  </div>
+</div>
 
 <script type="text/plain" id="srcGarage"><!DOCTYPE html>
 <html lang="th">
@@ -12980,163 +13015,219 @@ window.addEventListener('storage',function(){if(pane.classList.contains('on'))re
 })();
 </script>
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-  import {
-    getAuth,
-    signInWithEmailAndPassword,
-    onAuthStateChanged,
-    signOut
-  } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
-  import {
-    getDatabase,
-    ref,
-    set,
-    push,
-    onValue
-  } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getDatabase, onValue, push, ref, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBpq37x6l-Wh4c6vB5-kCeXAhlwB6FaYCA",
-    authDomain: "pyt5-69582.firebaseapp.com",
-    databaseURL: "https://pyt5-69582-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "pyt5-69582",
-    storageBucket: "pyt5-69582.firebasestorage.app",
-    messagingSenderId: "289041836844",
-    appId: "1:289041836844:web:e1d4fe68c2bdb226bc5a89",
-    measurementId: "G-YWHBYW8XQV"
-  };
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyBvPAVKLx9Byowbz9YFRPNVnOHoRtrcgrw",
+  authDomain: "testnaja55.firebaseapp.com",
+  databaseURL: "https://testnaja55-default-rtdb.asia-southeast1.firebasedatabase.app/",
+  projectId: "testnaja55",
+  storageBucket: "testnaja55.firebasestorage.app",
+  messagingSenderId: "992982527950",
+  appId: "1:992982527950:web:67ff1ef3d0f5d5491e059f",
+  measurementId: "G-65WJX7PFC3"
+};
+const LOG_PATH = "garage18w/access_logs";
+const form = document.getElementById("authForm");
+const submitButton = document.getElementById("authSubmit");
+const errorBox = document.getElementById("authError");
+const emailInput = document.getElementById("authEmail");
+const passwordInput = document.getElementById("authPassword");
+const historyModal = document.getElementById("authHistory");
+let auth = null;
+let db = null;
+let stopHistoryListener = null;
+let statusTimer = null;
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getDatabase(app);
+function setAuthError(message) {
+  errorBox.textContent = message || "";
+}
 
-  const ROLE_MAP = {
-    "adminpyt@prayuk.com": "ผู้ดูแลระบบ / ผู้อนุมัติ",
-    "storepyt@prayuk.com": "ฝ่ายสโตร์ / จัดซื้อ",
-    "techpyt@prayuk.com": "ช่างซ่อม / ตรวจเช็ค"
-  };
+function reportLogError(error) {
+  console.error("Firebase access log operation failed", error);
+  const status = document.getElementById("authSyncStatus");
+  status.textContent = "ซิงก์ประวัติไม่สำเร็จ";
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(function () { status.textContent = ""; }, 6000);
+}
 
-  const loginOverlay = document.getElementById("erp-login-overlay");
-  const loginEmailInput = document.getElementById("login-email");
-  const loginPassInput = document.getElementById("login-pass");
-  const loginBtn = document.getElementById("login-submit-btn");
-  const loginError = document.getElementById("login-error-msg");
+function dateTimeThai() {
+  return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).format(new Date());
+}
 
-  const nameInput = document.getElementById("erp-user-name");
-  const roleBadge = document.getElementById("erp-user-role-badge");
-  const logoutBtn = document.getElementById("erp-logout-btn");
-  const statusEl = document.getElementById("erp-sync-status");
-
-  let currentAuthUser = null;
-  let unsubscribeRecords = null;
-
-  function getRoleByEmail(email) {
-    const key = (email || "").toLowerCase();
-    return ROLE_MAP[key] || "ผู้ใช้งานระบบ";
-  }
-
-  async function handleLogin() {
-    const email = (loginEmailInput?.value || "").trim();
-    const pass = loginPassInput?.value || "";
-    if (!email || !pass) {
-      loginError.textContent = "กรุณากรอกอีเมลและรหัสผ่านให้ครบครับ";
-      return;
-    }
-    loginError.textContent = "กำลังตรวจสอบสิทธิ์...";
-    loginBtn.disabled = true;
-    try {
-      await signInWithEmailAndPassword(auth, email, pass);
-      loginError.textContent = "";
-      if (loginPassInput) loginPassInput.value = "";
-    } catch (err) {
-      loginError.textContent = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
-    } finally {
-      loginBtn.disabled = false;
-    }
-  }
-
-  loginBtn?.addEventListener("click", handleLogin);
-  loginPassInput?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") handleLogin();
-  });
-
-  logoutBtn?.addEventListener("click", async () => {
-    await signOut(auth);
-  });
-
-  window.erpSaveRecord = async function (recordId, payload, actionLabel = "บันทึก/อัปเดตข้อมูล") {
-    if (!currentAuthUser) {
-      alert("กรุณาเข้าสู่ระบบก่อนบันทึกข้อมูลครับ");
-      return false;
-    }
-
-    const userEmail = currentAuthUser.email;
-    const userRole = getRoleByEmail(userEmail);
-    const nowIso = new Date().toISOString();
-    const cleanId = String(recordId || `REC-${Date.now()}`).replace(/[.#$/[\]]/g, "_");
-
-    await set(ref(db, `smartGarage18w/records/${cleanId}`), {
-      ...payload,
-      updatedAt: nowIso,
-      updatedBy: userEmail,
-      updatedUid: currentAuthUser.uid,
-      updatedRole: userRole
+async function recordAction(actionText, emailOverride) {
+  const user = auth && auth.currentUser;
+  const email = emailOverride || (user && user.email);
+  if (!db || !email) return false;
+  try {
+    await push(ref(db, LOG_PATH), {
+      email: email,
+      dateTimeThai: dateTimeThai(),
+      action: String(actionText == null ? "" : actionText),
+      timestamp: serverTimestamp()
     });
-
-    await push(ref(db, "smartGarage18w/auditLogs"), {
-      recordId: cleanId,
-      action: actionLabel,
-      userEmail: userEmail,
-      userUid: currentAuthUser.uid,
-      userRole: userRole,
-      timestamp: nowIso
-    });
-
     return true;
-  };
+  } catch (error) {
+    reportLogError(error);
+    return false;
+  }
+}
+window.recordAction = recordAction;
 
-  onAuthStateChanged(auth, (user) => {
-    currentAuthUser = user;
-    if (user) {
-      const role = getRoleByEmail(user.email);
-      if (loginOverlay) loginOverlay.style.display = "none";
-      if (nameInput) nameInput.value = user.email;
-      if (roleBadge) roleBadge.textContent = role;
-
-      if (unsubscribeRecords) unsubscribeRecords();
-      unsubscribeRecords = onValue(
-        ref(db, "smartGarage18w/records"),
-        (snapshot) => {
-          if (statusEl) {
-            statusEl.textContent = "เชื่อมต่อ Firebase แล้ว (ซิงค์เรียลไทม์)";
-            statusEl.style.color = "#15803d";
-          }
-          window.__SG18W_CLOUD_RECORDS__ = snapshot.val() || {};
-          window.dispatchEvent(
-            new CustomEvent("sg18w:records-updated", { detail: window.__SG18W_CLOUD_RECORDS__ })
-          );
-        },
-        (error) => {
-          if (statusEl) {
-            statusEl.textContent = `สิทธิ์ฐานข้อมูลถูกปฏิเสธ: ${error.message}`;
-            statusEl.style.color = "#b91c1c";
-          }
-        }
-      );
-    } else {
-      if (unsubscribeRecords) {
-        unsubscribeRecords();
-        unsubscribeRecords = null;
-      }
-      if (loginOverlay) loginOverlay.style.display = "flex";
-      if (nameInput) nameInput.value = "";
-      if (roleBadge) roleBadge.textContent = "-";
-      if (statusEl) {
-        statusEl.textContent = "รอการเข้าสู่ระบบ";
-        statusEl.style.color = "#64748b";
-      }
-    }
+function renderHistory(snapshot) {
+  const body = document.getElementById("authHistoryRows");
+  const empty = document.getElementById("authHistoryEmpty");
+  const rows = [];
+  snapshot.forEach(function (child) {
+    rows.push(child.val() || {});
   });
+  rows.sort(function (a, b) {
+    return (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0);
+  });
+  body.textContent = "";
+  empty.textContent = "ยังไม่มีประวัติการใช้งาน";
+  empty.classList.toggle("hidden", rows.length > 0);
+  rows.forEach(function (entry) {
+    const tr = document.createElement("tr");
+    [entry.dateTimeThai || "-", entry.email || "-", entry.action || "-"].forEach(function (value) {
+      const td = document.createElement("td");
+      td.textContent = String(value);
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+}
+
+window.showAuthHistory = function () {
+  if (!auth || !auth.currentUser) return;
+  historyModal.classList.add("on");
+  const body = document.getElementById("authHistoryRows");
+  const empty = document.getElementById("authHistoryEmpty");
+  body.textContent = "";
+  empty.textContent = "กำลังโหลดประวัติ...";
+  empty.classList.remove("hidden");
+  if (stopHistoryListener) stopHistoryListener();
+  stopHistoryListener = onValue(ref(db, LOG_PATH), renderHistory, function (error) {
+    console.error("Firebase access log read failed", error);
+    body.textContent = "";
+    empty.textContent = "อ่านประวัติไม่ได้ กรุณาตรวจสอบสิทธิ์ Realtime Database";
+    empty.classList.remove("hidden");
+  });
+  document.getElementById("authHistoryClose").focus();
+};
+
+window.hideAuthHistory = function () {
+  historyModal.classList.remove("on");
+  if (stopHistoryListener) {
+    stopHistoryListener();
+    stopHistoryListener = null;
+  }
+};
+
+function showUser(user) {
+  document.getElementById("authDisplayName").textContent = user.displayName || user.email || "";
+  document.getElementById("authDisplayRole").textContent = user.email || "";
+}
+
+function authErrorMessage(error) {
+  const messages = {
+    "auth/invalid-email": "รูปแบบอีเมลไม่ถูกต้อง",
+    "auth/invalid-credential": "อีเมลหรือรหัสผ่านไม่ถูกต้อง",
+    "auth/wrong-password": "อีเมลหรือรหัสผ่านไม่ถูกต้อง",
+    "auth/user-not-found": "อีเมลหรือรหัสผ่านไม่ถูกต้อง",
+    "auth/user-disabled": "บัญชีนี้ถูกปิดใช้งาน",
+    "auth/too-many-requests": "ลองเข้าสู่ระบบหลายครั้งเกินไป กรุณารอสักครู่",
+    "auth/network-request-failed": "เชื่อมต่อ Firebase ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต"
+  };
+  return messages[error.code] || "เข้าสู่ระบบไม่สำเร็จ: " + error.message;
+}
+
+form.addEventListener("submit", async function (event) {
+  event.preventDefault();
+  if (!auth) return;
+  setAuthError("");
+  submitButton.disabled = true;
+  submitButton.textContent = "กำลังเข้าสู่ระบบ...";
+  try {
+    const credential = await signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value);
+    await recordAction("เข้าสู่ระบบ", credential.user.email);
+    passwordInput.value = "";
+  } catch (error) {
+    console.error("Firebase sign-in failed", error);
+    setAuthError(authErrorMessage(error));
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "เข้าสู่ระบบ";
+  }
+});
+
+window.logoutUser = async function () {
+  if (!auth || !auth.currentUser) return;
+  const email = auth.currentUser.email;
+  window.hideAuthHistory();
+  const logged = await recordAction("ออกจากระบบ", email);
+  try {
+    await signOut(auth);
+    if (!logged) setAuthError("ออกจากระบบแล้ว แต่บันทึกประวัติไม่สำเร็จ");
+  } catch (error) {
+    console.error("Firebase sign-out failed", error);
+    reportLogError(error);
+  }
+};
+
+if (typeof window.switchTab === "function") {
+  const switchTabBeforeAuth = window.switchTab;
+  window.switchTab = function (tab) {
+    const result = switchTabBeforeAuth.apply(this, arguments);
+    const labels = { cost: "ต้นทุน", garage: "งานอู่", purchase: "จัดซื้อ", store: "สโตร์" };
+    if (auth && auth.currentUser) {
+      window.recordAction("เปิดโมดูล " + (labels[tab] || String(tab)));
+    }
+    return result;
+  };
+}
+
+try {
+  const app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getDatabase(app);
+  submitButton.disabled = false;
+  submitButton.textContent = "เข้าสู่ระบบ";
+  onAuthStateChanged(auth, function (user) {
+    if (user) {
+      showUser(user);
+      setAuthError("");
+      document.body.classList.add("auth-ok");
+    } else {
+      window.hideAuthHistory();
+      document.getElementById("authDisplayName").textContent = "";
+      document.getElementById("authDisplayRole").textContent = "";
+      passwordInput.value = "";
+      document.body.classList.remove("auth-ok");
+      emailInput.focus();
+    }
+  }, function (error) {
+    console.error("Firebase auth state listener failed", error);
+    setAuthError("ตรวจสอบสถานะผู้ใช้ไม่สำเร็จ: " + error.message);
+  });
+} catch (error) {
+  console.error("Firebase initialization failed", error);
+  setAuthError(error.message);
+  submitButton.disabled = true;
+  submitButton.textContent = "เชื่อมต่อ Firebase ไม่สำเร็จ";
+}
 </script>
 </body>
 </html>
