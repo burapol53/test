@@ -149,17 +149,28 @@ main#stage{position:relative;flex:1;min-height:0;background:#fff}
 #gSub button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 </style>
 </head>
-<body><div id="erp-user-bar"></div><div id="erp-user-bar" style="background:#f8fafc;border-bottom:1px solid #cbd5e1;padding:8px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-family:sans-serif;font-size:14px;">
+<div id="erp-login-overlay" style="position:fixed;inset:0;background:rgba(15,23,42,0.88);z-index:9999;display:flex;align-items:center;justify-content:center;font-family:sans-serif;padding:16px;">
+  <div style="background:#fff;padding:24px;border-radius:12px;width:100%;max-width:360px;box-shadow:0 10px 25px rgba(0,0,0,0.3);">
+    <h3 style="margin:0 0 6px;color:#0f172a;text-align:center;">SMART GARAGE 18W</h3>
+    <p style="margin:0 0 16px;color:#64748b;font-size:13px;text-align:center;">เข้าสู่ระบบเพื่อบันทึกและตรวจสอบข้อมูลอู่</p>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:13px;margin-bottom:4px;color:#334155;">อีเมลผู้ใช้งาน</label>
+      <input id="login-email" type="email" placeholder="เช่น techpyt@prayuk.com" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;" />
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-size:13px;margin-bottom:4px;color:#334155;">รหัสผ่าน</label>
+      <input id="login-pass" type="password" placeholder="••••••••" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;" />
+    </div>
+    <button id="login-submit-btn" type="button" style="width:100%;padding:10px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;font-weight:bold;font-size:14px;cursor:pointer;">เข้าสู่ระบบ</button>
+    <p id="login-error-msg" style="color:#dc2626;font-size:13px;margin:10px 0 0;text-align:center;min-height:18px;"></p>
+  </div>
+</div>
+
+<div id="erp-user-bar" style="background:#f8fafc;border-bottom:1px solid #cbd5e1;padding:8px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-family:sans-serif;font-size:14px;">
   <strong>ผู้ใช้งาน ERP:</strong>
-  <input id="erp-user-name" type="text" placeholder="กรอกรหัส / ชื่อพนักงาน" style="padding:4px 8px;border:1px solid #94a3b8;border-radius:4px;" />
-  <select id="erp-user-role" style="padding:4px 8px;border:1px solid #94a3b8;border-radius:4px;">
-    <option value="ผู้บันทึก">ผู้บันทึก</option>
-    <option value="ช่างซ่อม">ช่างซ่อม</option>
-    <option value="หัวหน้าช่าง">หัวหน้าช่าง</option>
-    <option value="ผู้ตรวจสอบ">ผู้ตรวจสอบ</option>
-    <option value="ผู้อนุมัติ">ผู้อนุมัติ</option>
-  </select>
-  <button id="erp-save-user-btn" type="button" style="padding:4px 12px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;">บันทึกผู้ใช้งาน</button>
+  <input id="erp-user-name" type="text" readonly placeholder="ยังไม่ได้เข้าสู่ระบบ" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:4px;background:#e2e8f0;color:#0f172a;font-weight:bold;min-width:190px;" />
+  <span id="erp-user-role-badge" style="padding:4px 10px;background:#dbeafe;color:#1e40af;border-radius:999px;font-size:12px;font-weight:bold;">-</span>
+  <button id="erp-logout-btn" type="button" style="padding:4px 10px;background:#ef4444;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;">ออกจากระบบ</button>
   <span id="erp-sync-status" style="margin-left:auto;color:#64748b;font-size:13px;">กำลังเชื่อมต่อ Firebase...</span>
 </div>
 <header>
@@ -12971,6 +12982,12 @@ window.addEventListener('storage',function(){if(pane.classList.contains('on'))re
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
   import {
+    getAuth,
+    signInWithEmailAndPassword,
+    onAuthStateChanged,
+    signOut
+  } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+  import {
     getDatabase,
     ref,
     set,
@@ -12990,102 +13007,135 @@ window.addEventListener('storage',function(){if(pane.classList.contains('on'))re
   };
 
   const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
   const db = getDatabase(app);
 
-  const USER_STORAGE_KEY = "sg18w_erp_current_user";
+  const ROLE_MAP = {
+    "adminpyt@prayuk.com": "ผู้ดูแลระบบ / ผู้อนุมัติ",
+    "storepyt@prayuk.com": "ฝ่ายสโตร์ / จัดซื้อ",
+    "techpyt@prayuk.com": "ช่างซ่อม / ตรวจเช็ค"
+  };
+
+  const loginOverlay = document.getElementById("erp-login-overlay");
+  const loginEmailInput = document.getElementById("login-email");
+  const loginPassInput = document.getElementById("login-pass");
+  const loginBtn = document.getElementById("login-submit-btn");
+  const loginError = document.getElementById("login-error-msg");
+
   const nameInput = document.getElementById("erp-user-name");
-  const roleSelect = document.getElementById("erp-user-role");
-  const saveUserBtn = document.getElementById("erp-save-user-btn");
+  const roleBadge = document.getElementById("erp-user-role-badge");
+  const logoutBtn = document.getElementById("erp-logout-btn");
   const statusEl = document.getElementById("erp-sync-status");
 
-  function loadCurrentUser() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(USER_STORAGE_KEY) || "null");
-      if (saved) {
-        if (nameInput && saved.name) nameInput.value = saved.name;
-        if (roleSelect && saved.role) roleSelect.value = saved.role;
-        return saved;
-      }
-    } catch (e) {}
-    return { name: "", role: "ผู้บันทึก" };
+  let currentAuthUser = null;
+  let unsubscribeRecords = null;
+
+  function getRoleByEmail(email) {
+    const key = (email || "").toLowerCase();
+    return ROLE_MAP[key] || "ผู้ใช้งานระบบ";
   }
 
-  function getCurrentUser() {
-    const name = (nameInput?.value || "").trim();
-    const role = roleSelect?.value || "ผู้บันทึก";
-    return { name, role };
-  }
-
-  saveUserBtn?.addEventListener("click", () => {
-    const user = getCurrentUser();
-    if (!user.name) {
-      alert("กรุณากรอกรหัสหรือชื่อผู้ใช้งานก่อนครับ");
-      nameInput?.focus();
+  async function handleLogin() {
+    const email = (loginEmailInput?.value || "").trim();
+    const pass = loginPassInput?.value || "";
+    if (!email || !pass) {
+      loginError.textContent = "กรุณากรอกอีเมลและรหัสผ่านให้ครบครับ";
       return;
     }
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-    alert(`บันทึกผู้ใช้งานเรียบร้อย: ${user.name} (${user.role})`);
+    loginError.textContent = "กำลังตรวจสอบสิทธิ์...";
+    loginBtn.disabled = true;
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+      loginError.textContent = "";
+      if (loginPassInput) loginPassInput.value = "";
+    } catch (err) {
+      loginError.textContent = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+    } finally {
+      loginBtn.disabled = false;
+    }
+  }
+
+  loginBtn?.addEventListener("click", handleLogin);
+  loginPassInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleLogin();
   });
 
-  loadCurrentUser();
+  logoutBtn?.addEventListener("click", async () => {
+    await signOut(auth);
+  });
 
   window.erpSaveRecord = async function (recordId, payload, actionLabel = "บันทึก/อัปเดตข้อมูล") {
-    const user = getCurrentUser();
-    if (!user.name) {
-      alert("กรุณากรอกรหัสหรือชื่อผู้ใช้งานที่แถบด้านบนก่อนบันทึกข้อมูลครับ");
-      nameInput?.focus();
+    if (!currentAuthUser) {
+      alert("กรุณาเข้าสู่ระบบก่อนบันทึกข้อมูลครับ");
       return false;
     }
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
 
+    const userEmail = currentAuthUser.email;
+    const userRole = getRoleByEmail(userEmail);
     const nowIso = new Date().toISOString();
     const cleanId = String(recordId || `REC-${Date.now()}`).replace(/[.#$/[\]]/g, "_");
 
-    const enrichedData = {
+    await set(ref(db, `smartGarage18w/records/${cleanId}`), {
       ...payload,
       updatedAt: nowIso,
-      updatedBy: user.name,
-      updatedRole: user.role
-    };
-
-    await set(ref(db, `smartGarage18w/records/${cleanId}`), enrichedData);
+      updatedBy: userEmail,
+      updatedUid: currentAuthUser.uid,
+      updatedRole: userRole
+    });
 
     await push(ref(db, "smartGarage18w/auditLogs"), {
       recordId: cleanId,
       action: actionLabel,
-      userName: user.name,
-      userRole: user.role,
-      timestamp: nowIso,
-      userAgent: navigator.userAgent
+      userEmail: userEmail,
+      userUid: currentAuthUser.uid,
+      userRole: userRole,
+      timestamp: nowIso
     });
 
     return true;
   };
 
-  window.erpSubscribeRecords = function (callback) {
-    const recordsRef = ref(db, "smartGarage18w/records");
-    onValue(
-      recordsRef,
-      (snapshot) => {
-        if (statusEl) {
-          statusEl.textContent = "เชื่อมต่อ Firebase แล้ว (ซิงค์เรียลไทม์)";
-          statusEl.style.color = "#15803d";
-        }
-        const val = snapshot.val() || {};
-        if (typeof callback === "function") callback(val);
-      },
-      (error) => {
-        if (statusEl) {
-          statusEl.textContent = `เชื่อมต่อฐานข้อมูลไม่สำเร็จ: ${error.message}`;
-          statusEl.style.color = "#b91c1c";
-        }
-      }
-    );
-  };
+  onAuthStateChanged(auth, (user) => {
+    currentAuthUser = user;
+    if (user) {
+      const role = getRoleByEmail(user.email);
+      if (loginOverlay) loginOverlay.style.display = "none";
+      if (nameInput) nameInput.value = user.email;
+      if (roleBadge) roleBadge.textContent = role;
 
-  window.erpSubscribeRecords((records) => {
-    window.__SG18W_CLOUD_RECORDS__ = records;
-    window.dispatchEvent(new CustomEvent("sg18w:records-updated", { detail: records }));
+      if (unsubscribeRecords) unsubscribeRecords();
+      unsubscribeRecords = onValue(
+        ref(db, "smartGarage18w/records"),
+        (snapshot) => {
+          if (statusEl) {
+            statusEl.textContent = "เชื่อมต่อ Firebase แล้ว (ซิงค์เรียลไทม์)";
+            statusEl.style.color = "#15803d";
+          }
+          window.__SG18W_CLOUD_RECORDS__ = snapshot.val() || {};
+          window.dispatchEvent(
+            new CustomEvent("sg18w:records-updated", { detail: window.__SG18W_CLOUD_RECORDS__ })
+          );
+        },
+        (error) => {
+          if (statusEl) {
+            statusEl.textContent = `สิทธิ์ฐานข้อมูลถูกปฏิเสธ: ${error.message}`;
+            statusEl.style.color = "#b91c1c";
+          }
+        }
+      );
+    } else {
+      if (unsubscribeRecords) {
+        unsubscribeRecords();
+        unsubscribeRecords = null;
+      }
+      if (loginOverlay) loginOverlay.style.display = "flex";
+      if (nameInput) nameInput.value = "";
+      if (roleBadge) roleBadge.textContent = "-";
+      if (statusEl) {
+        statusEl.textContent = "รอการเข้าสู่ระบบ";
+        statusEl.style.color = "#64748b";
+      }
+    }
   });
 </script>
 </body>
