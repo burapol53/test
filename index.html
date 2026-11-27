@@ -9943,7 +9943,7 @@ var st={view:'summary',id:'',ret:'summary'},idxCache=null,idxAt=0,saveT=null,sav
 
 function h(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function nm(s){return String(s||'').toLowerCase().replace(/\/\/[^\n]*/g,' ').replace(/\([^)]*\)/g,' ').replace(/\s+/g,' ').trim()}
-function nf(v,d){return (+(v||0)).toLocaleString('th-TH',{maximumFractionDigits:d==null?2:d})}
+function nf(v,d){return safeNum(v).toLocaleString('th-TH',{maximumFractionDigits:d==null?2:d})}
 function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function thd(s){if(!s)return '-';var a=String(s).slice(0,10).split('-');return a.length===3?a[2]+'/'+a[1]+'/'+(+a[0]+543):h(s)}
 function toast(m,w){try{showToast(m,!!w)}catch(e){alert(m)}}
@@ -10097,6 +10097,7 @@ function normDoc(d){
  d.customer=d.customer||{name:'',address:'',phone:''};
  d.sign=d.sign||{issuer:'',mechanic:'',store:'',manager:'',customer:''};
  d.reported=d.reported||[];d.labor=d.labor||[];d.parts=d.parts||[];
+ d.reported.forEach(function(r){if(r.qty==null)r.qty=1});
  d.kind=d.kind||'repair';
  return d;
 }
@@ -10126,13 +10127,19 @@ function storeIdx(){
  try{
   var S=JSON.parse(localStorage.getItem('stk1')||'null');
   if(S&&Array.isArray(S.items)&&S.items.length){
-   live=true;var start=(S.cfg&&S.cfg.start)||'0000-00-00',fac={},rec={},out={};
+   live=true;var start=(S.cfg&&S.cfg.start)||'0000-00-00',fac={},rec={},out={},costValue={},costQty={};
    S.items.forEach(function(it){fac[it.c]=+it.f||1});
-   (S.rec||[]).forEach(function(r){if(r[0]>=start)rec[r[3]]=(rec[r[3]]||0)+(+r[4]||0)*(fac[r[3]]||1)});
+   (S.rec||[]).forEach(function(r){
+    var code=String(r[3]||''),qty=safeNum(r[4]),price=safeNum(r[5]),factor=fac[code]||1;
+    if(r[0]>=start)rec[code]=(rec[code]||0)+qty*factor;
+    if(qty>0&&price>0){costValue[code]=(costValue[code]||0)+qty*price;costQty[code]=(costQty[code]||0)+qty*factor}
+   });
    (S.iss||[]).forEach(function(r){if(r[0]>=start)out[r[2]]=(out[r[2]]||0)+(+r[3]||0)});
    S.items.forEach(function(it){
     if(it.g||/^\(ยกเลิก\)/.test(String(it.n||'').trim()))return;
-    var q={c:it.c,n:it.n,u:it.u||'',p:+it.p||0,st:(+it.o||0)+(rec[it.c]||0)-(out[it.c]||0),src:'สโตร์'};
+    var price=safeNum(it.p);
+    if(!(price>0)&&costQty[it.c]>0)price=costValue[it.c]/costQty[it.c];
+    var q={c:it.c,n:it.n,u:it.u||'',p:safeNum(price),st:(+it.o||0)+(rec[it.c]||0)-(out[it.c]||0),src:'สโตร์'};
     items.push(q);byCode[q.c]=q;var bk=nm(q.n),pv=byName[bk];if(!pv||((+pv.p||0)<=0&&q.p>0))byName[bk]=q;
    });
   }
@@ -10166,13 +10173,19 @@ function findPart(q){
 }
 
 /* ---------- คำนวณ ---------- */
-function rowTotal(l){return (+l.hours||0)*(+l.qty||0)*(+l.price||0)}
-function hoursTotal(d){var s=0;(d.labor||[]).forEach(function(l){s+=(+l.hours||0)*(+l.qty||0)});return s}
+function safeNum(v){var n=Number(String(v==null?'0':v).replace(/,/g,'').trim());return Number.isFinite(n)?n:0}
+function safeAmount(){var n=1;for(var i=0;i<arguments.length;i++)n*=safeNum(arguments[i]);return Number.isFinite(n)?n:0}
+function moneyText(v,suffix){var n=safeNum(v);return n===0?'-':nf(n)+(suffix||'')}
+function priceInput(v){var n=safeNum(v);return n===0?'':String(n)}
+function rowTotal(l){return safeNum(l.price)}
+function hoursTotal(d){var s=0;(d.labor||[]).forEach(function(l){s=safeNum(s+safeAmount(l.hours,l.qty))});return s}
+function partQty(p){return p.buyQty===''||p.buyQty==null?safeNum(p.qty):safeNum(p.buyQty)}
+function partAmount(p){return safeNum(p.price)}
 function totals(d){
  var L=0,P=0,R=0;
- (d.labor||[]).forEach(function(l){var t=rowTotal(l);if(l.appr==='0')R+=t;else L+=t});
- (d.parts||[]).forEach(function(p){var t=(+p.qty||0)*(+p.price||0);if(p.appr==='0')R+=t;else P+=t});
- return {labor:L,parts:P,rej:R,grand:L+P};
+ (d.labor||[]).forEach(function(l){var t=rowTotal(l);if(l.appr==='0')R=safeNum(R+t);else L=safeNum(L+t)});
+ (d.parts||[]).forEach(function(p){var t=partAmount(p);if(p.appr==='0')R=safeNum(R+t);else P=safeNum(P+t)});
+ return {labor:L,parts:P,rej:R,grand:safeNum(L+P)};
 }
 function recalc(){
  var d=cur();if(!d)return;var t=totals(d);
@@ -10180,8 +10193,8 @@ function recalc(){
  set('qgTotLabor',nf(t.labor)+' ฿');set('qgTotParts',nf(t.parts)+' ฿');
  set('qgTotAll',nf(t.grand)+' ฿');set('qgTotRej',nf(t.rej)+' ฿');
  set('qgTotHours',nf(hoursTotal(d))+' ชม.');
- (d.labor||[]).forEach(function(l,i){set('qgLabRow'+i,nf(rowTotal(l))+' ฿')});
- (d.parts||[]).forEach(function(p,i){set('qgPartRow'+i,nf((+p.qty||0)*(+p.price||0))+' ฿')});
+ (d.labor||[]).forEach(function(l,i){set('qgLabRow'+i,moneyText(rowTotal(l),' ฿'))});
+ (d.parts||[]).forEach(function(p,i){set('qgPartRow'+i,moneyText(partAmount(p),' ฿'))});
 }
 
 /* ---------- สร้าง/เปิด/ลบ ---------- */
@@ -10294,14 +10307,14 @@ function pullJobItems(){
   var c=rec.checklist[id];if(!c||(c.status!=='repair'&&c.status!=='replace'))return;
   var def=(typeof getChecklistDef==='function')?getChecklistDef(id):null;
   var label=(def&&def.name)||id;
-  rep.push({text:label+(c.note?' — '+c.note:''),appr:''});
+  rep.push({text:label+(c.note?' — '+c.note:''),qty:1,appr:''});
   lab.push({desc:label+(c.note?': '+c.note:''),hours:1,qty:1,price:0,appr:''});
   addPart(c.parts);
  });
  Object.keys(rec.tires||{}).forEach(function(code){
   var t=rec.tires[code];if(!t||(t.status!=='repair'&&t.status!=='urgent'))return;
   var txt='ยาง '+code+' ('+tireLabel(code)+')'+(t.actions&&t.actions.length?' — '+t.actions.join(', '):'')+(t.note?' · '+t.note:'');
-  rep.push({text:txt,appr:''});
+  rep.push({text:txt,qty:1,appr:''});
   (t.actions||[]).forEach(function(a){lab.push({desc:a+' · '+tireLabel(code),hours:1,qty:1,price:0,appr:''})});
   if(!(t.actions||[]).length)lab.push({desc:'ตรวจ/ซ่อม '+tireLabel(code),hours:1,qty:1,price:0,appr:''});
   addPart(t.parts);
@@ -10320,72 +10333,130 @@ function pullJobItems(){
 
 /* ---------- แก้ตาราง ---------- */
 function repAdd(){
- var d=cur(),el=document.getElementById('qgRepAdd'),v=el?el.value.trim():'';
- if(!d||!v)return;d.reported.push({text:v,appr:''});put(d,true);render();
- var n=document.getElementById('qgRepAdd');if(n)n.focus();
+ var d=cur(),el=document.getElementById('qgRepNewDesc'),qty=document.getElementById('qgRepNewQty'),appr=document.getElementById('qgRepNewAppr');
+ var v=el?el.value.trim():'';
+ if(!d||!v)return;
+ d.reported.push({text:v,qty:safeNum(qty&&qty.value),appr:appr?appr.value:''});
+ put(d,true);render();
+ var clearedQty=document.getElementById('qgRepNewQty'),clearedAppr=document.getElementById('qgRepNewAppr');
+ if(clearedQty)clearedQty.value='';
+ if(clearedAppr)clearedAppr.value='';
+ var n=document.getElementById('qgRepNewDesc');if(n)n.focus();
 }
 function repSet(i,v){var d=cur();if(!d||!d.reported[i])return;d.reported[i].text=v;scheduleSave(d)}
-function repAppr(i,v){var d=cur();if(!d||!d.reported[i])return;d.reported[i].appr=v;put(d,true)}
+function repQty(i,v){var d=cur();if(!d||!d.reported[i])return;d.reported[i].qty=safeNum(v);scheduleSave(d)}
+function syncApprovalChecks(rowId,value){
+ var row=document.getElementById(rowId);if(!row)return;
+ var checks=row.querySelectorAll('input[type="checkbox"]');
+ if(checks[0])checks[0].checked=value==='1';
+ if(checks[1])checks[1].checked=value==='0';
+}
+function repAppr(i,v,checked){var d=cur();if(!d||!d.reported[i])return;d.reported[i].appr=checked?v:(d.reported[i].appr===v?'':'');syncApprovalChecks('qgRepWrap'+i,d.reported[i].appr);put(d,true)}
 function repDel(i){var d=cur();if(!d)return;d.reported.splice(i,1);put(d,true);render()}
 function labAdd(){
- var d=cur(),el=document.getElementById('qgLabAdd'),v=el?el.value.trim():'';
+ var d=cur(),el=document.getElementById('qgLabNewDesc'),hours=document.getElementById('qgLabNewHours'),qty=document.getElementById('qgLabNewQty'),price=document.getElementById('qgLabNewPrice'),rate=document.getElementById('qgRate'),appr=document.getElementById('qgLabNewAppr'),v=el?el.value.trim():'';
  if(!d||!v)return;
- d.labor.push({desc:v,hours:1,qty:1,price:(+((document.getElementById('qgRate')||{}).value)||0),appr:''});
+ var unitPrice=price&&price.value!==''?safeNum(price.value):safeNum(rate&&rate.value);
+ d.labor.push({desc:v,hours:safeNum(hours&&hours.value),qty:safeNum(qty&&qty.value),price:unitPrice,appr:appr?appr.value:''});
  put(d,true);render();
- var n=document.getElementById('qgLabAdd');if(n)n.focus();
+ [document.getElementById('qgLabNewHours'),document.getElementById('qgLabNewQty'),document.getElementById('qgLabNewPrice')].forEach(function(el){if(el)el.value=''});
+ var clearedAppr=document.getElementById('qgLabNewAppr');if(clearedAppr)clearedAppr.value='';
+ labDraftCalc();
+ var n=document.getElementById('qgLabNewDesc');if(n)n.focus();
 }
-function labSet(i,f,v){var d=cur();if(!d||!d.labor[i])return;d.labor[i][f]=f==='desc'?v:(+v||0);recalc();scheduleSave(d)}
-function labAppr(i,v){var d=cur();if(!d||!d.labor[i])return;d.labor[i].appr=v;put(d,true);recalc()}
+function labDraftCalc(){
+ var hours=document.getElementById('qgLabNewHours'),qty=document.getElementById('qgLabNewQty'),price=document.getElementById('qgLabNewPrice'),rate=document.getElementById('qgRate'),total=document.getElementById('qgLabNewTotal');
+ var unitPrice=price&&price.value!==''?safeNum(price.value):safeNum(rate&&rate.value);
+ if(total)total.textContent=moneyText(unitPrice,' ฿');
+}
+function labSet(i,f,v){var d=cur();if(!d||!d.labor[i])return;d.labor[i][f]=f==='desc'?v:safeNum(v);recalc();scheduleSave(d)}
+function labAppr(i,v,checked){var d=cur();if(!d||!d.labor[i])return;d.labor[i].appr=checked?v:(d.labor[i].appr===v?'':'');syncApprovalChecks('qgLabWrap'+i,d.labor[i].appr);put(d,true);recalc()}
 function labDel(i){var d=cur();if(!d)return;d.labor.splice(i,1);put(d,true);render()}
 function labRate(){
- var d=cur(),r=+((document.getElementById('qgRate')||{}).value)||0;
+ var d=cur(),r=safeNum((document.getElementById('qgRate')||{}).value);
  if(!d)return;(d.labor||[]).forEach(function(l){l.price=r});put(d,true);recalc();
  toast('ตั้งราคา/หน่วยค่าแรงทุกบรรทัดเป็น '+nf(r)+' บาท');
 }
 function partAdd(){
- var d=cur(),el=document.getElementById('qgPartAdd'),v=el?el.value.trim():'';
+ var d=cur(),el=document.getElementById('qgPartNewName'),qtyEl=document.getElementById('qgPartNewQty'),buyEl=document.getElementById('qgPartNewBuy'),priceEl=document.getElementById('qgPartNewPrice'),apprEl=document.getElementById('qgPartNewAppr'),v=el?el.value.trim():'';
  if(!d||!v)return;
  var p=findPart(v)||{c:'',n:v,u:'',p:0,st:null};
  if(d.parts.some(function(x){return (p.c&&x.code===p.c)||nm(x.name)===nm(p.n)}))return toast('มีรายการนี้อยู่แล้ว',1);
- var stk=(p.st==null?'':p.st);
- d.parts.push({code:p.c||'',name:p.n||v,unit:p.u||'',qty:1,stock:stk,buyQty:(stk===''?'':Math.max(0,1-(+stk||0))),price:p.p||0,appr:''});
+ var qty=safeNum(qtyEl&&qtyEl.value),stk=(p.st==null?'':p.st);
+ var buyQty=buyEl&&buyEl.value!==''?safeNum(buyEl.value):(stk===''?'':Math.max(0,qty-safeNum(stk)));
+ d.parts.push({code:p.c||'',name:p.n||v,unit:p.u||'',qty:qty,stock:stk,buyQty:buyQty,price:safeNum(priceEl&&priceEl.value),appr:apprEl?apprEl.value:''});
  put(d,true);render();
- var n=document.getElementById('qgPartAdd');if(n)n.focus();
+ var clearedName=document.getElementById('qgPartNewName'),clearedStock=document.getElementById('qgPartNewStock'),clearedAppr=document.getElementById('qgPartNewAppr');
+ if(clearedName)clearedName.setAttribute('data-code','');
+ if(clearedStock)clearedStock.value='-';
+ [document.getElementById('qgPartNewQty'),document.getElementById('qgPartNewBuy'),document.getElementById('qgPartNewPrice')].forEach(function(el){if(el)el.value=''});
+ if(clearedAppr)clearedAppr.value='';
+ partDraftCalc();
+ var n=document.getElementById('qgPartNewName');if(n)n.focus();
+}
+function partDraftLookup(){
+ var name=document.getElementById('qgPartNewName'),stock=document.getElementById('qgPartNewStock'),buy=document.getElementById('qgPartNewBuy'),price=document.getElementById('qgPartNewPrice');
+ if(!name||!stock||!buy||!price)return;
+ var row=findPart(name.value),previousCode=name.getAttribute('data-code')||'';
+ if(!row){
+ if(previousCode){name.setAttribute('data-code','');stock.value='-';buy.value='';buy.setAttribute('data-manual','');price.value=''}
+  partDraftCalc();return
+ }
+ if(previousCode!==row.c){
+  name.setAttribute('data-code',row.c);
+  stock.value=row.st==null?'-':safeNum(row.st);
+  price.value=priceInput(row.p);
+  buy.value=row.st==null?'':Math.max(0,safeNum((document.getElementById('qgPartNewQty')||{}).value)-safeNum(row.st));
+  buy.setAttribute('data-manual','');
+ }
+ partDraftCalc();
+}
+function partDraftQtyChanged(){
+ var name=document.getElementById('qgPartNewName'),stock=document.getElementById('qgPartNewStock'),buy=document.getElementById('qgPartNewBuy'),qty=document.getElementById('qgPartNewQty');
+ if(name&&stock&&buy&&qty&&name.getAttribute('data-code')&&buy.getAttribute('data-manual')!=='1'&&stock.value!==''&&stock.value!=='-')buy.value=Math.max(0,safeNum(qty.value)-safeNum(stock.value));
+ partDraftCalc();
+}
+function partDraftBuyChanged(){
+ var buy=document.getElementById('qgPartNewBuy');if(buy)buy.setAttribute('data-manual','1');
+ partDraftCalc();
+}
+function partDraftCalc(){
+ var qty=document.getElementById('qgPartNewQty'),buy=document.getElementById('qgPartNewBuy'),price=document.getElementById('qgPartNewPrice'),total=document.getElementById('qgPartNewTotal');
+ if(total)total.textContent=moneyText(partAmount({price:price&&price.value}),' ฿');
 }
 function partSet(i,f,v){
  var d=cur();if(!d||!d.parts[i])return;
- d.parts[i][f]=(f==='qty'||f==='buyQty'||f==='price')?(+v||0):v;
- if(f==='qty'){
-  var p=d.parts[i];
-  if(p.stock!==''&&p.stock!=null){p.buyQty=Math.max(0,(+p.qty||0)-(+p.stock||0));var b=document.getElementById('qgBuy'+i);if(b)b.value=p.buyQty}
+ d.parts[i][f]=f==='buyQty'?(v===''?'':safeNum(v)):(f==='qty'||f==='price'?safeNum(v):v);
+ recalc();scheduleSave(d);
+}
+function partNameInput(i,v){
+ var d=cur();if(!d||!d.parts[i])return;
+ var row=d.parts[i],match=findPart(v);
+ row.name=v;
+ if(match&&match.c!==row.code){
+  row.code=match.c;row.name=match.n;row.unit=match.u||'';
+  row.price=safeNum(match.p);row.stock=match.st==null?'':match.st;
+  row.buyQty=match.st==null?'':Math.max(0,safeNum(row.qty)-safeNum(match.st));
  }
  recalc();scheduleSave(d);
 }
 function partLookup(i,f,v){
  var d=cur();if(!d||!d.parts[i])return;
  var p=findPart(v);
- if(!p){d.parts[i][f]=v;scheduleSave(d);return}
- d.parts[i].code=p.c;d.parts[i].name=p.n;d.parts[i].unit=p.u||'';
- d.parts[i].price=p.p||0;d.parts[i].stock=(p.st==null?'':p.st);
- d.parts[i].buyQty=(p.st==null?'':Math.max(0,(+d.parts[i].qty||0)-(+p.st||0)));
+ var row=d.parts[i],previousCode=row.code;
+ if(!p){
+  row[f]=v;row.code='';row.unit='';row.price=0;row.stock='';row.buyQty='';
+  put(d,true);recalc();return
+ }
+ row.code=p.c;row.name=p.n;row.unit=p.u||'';
+ if(previousCode!==p.c||!safeNum(row.price))row.price=safeNum(p.p);
+ row.stock=p.st==null?'':p.st;
+ if(previousCode!==p.c||row.buyQty===''||row.buyQty==null)row.buyQty=(p.st==null?'':Math.max(0,safeNum(row.qty)-safeNum(p.st)));
  put(d,true);render();
  toast('จับคู่ '+p.n+' · '+p.src+' · คงเหลือ '+nf(p.st)+' · ราคา '+nf(p.p)+' บาท');
 }
-function partAppr(i,v){var d=cur();if(!d||!d.parts[i])return;d.parts[i].appr=v;put(d,true);recalc()}
+function partAppr(i,v,checked){var d=cur();if(!d||!d.parts[i])return;d.parts[i].appr=checked?v:(d.parts[i].appr===v?'':'');syncApprovalChecks('qgPartWrap'+i,d.parts[i].appr);put(d,true);recalc()}
 function partDel(i){var d=cur();if(!d)return;d.parts.splice(i,1);put(d,true);render()}
-
-/* ---------- ส่งอะไหล่ไปสโตร์ ---------- */
-function sendParts(){
- var d=cur();if(!d)return;
- var lines=(d.parts||[]).filter(function(p){return p.code&&(+p.qty||0)>0&&p.appr!=='0'}).map(function(p){return {c:p.code,n:p.name,u:p.unit||'',q:+p.qty}});
- if(!lines.length)return toast('ยังไม่มีรายการอะไหล่ที่มีรหัสในระบบสโตร์ (หรือถูกไม่อนุมัติทั้งหมด)',1);
- var w=window.PGSParts;
- if(!w||!w.quoteRequest)return toast('ระบบเชื่อมสโตร์ยังไม่พร้อม',1);
- if(d.storeReq&&!confirm('ใบนี้เคยส่งไปสโตร์แล้ว ('+d.storeReq+') — ส่งซ้ำหรือไม่?'))return;
- var r=w.quoteRequest({plate:d.headPlate||'',trailer:d.trailerPlate||'',jobId:d.jobId||'',mechanic:d.sign.mechanic||'',urgency:'ปกติ',note:'ใบเสนอราคา '+d.no+' · ลูกค้า '+(d.customer.name||'-'),lines:lines});
- d.storeReq=r.id;if(d.status!=='approved')d.status='sent';put(d);render();
- toast('ส่งใบเบิกอะไหล่ '+lines.length+' รายการไปสโตร์แล้ว · '+r.id);
-}
 
 /* ---------- PRINT ---------- */
 function apprCell(v){return v==='1'?'<b>✓</b>':v==='0'?'<b>✗</b>':''}
@@ -10410,38 +10481,38 @@ function printDoc(){
  var d=cur();if(!d)return;
  if(!isApprovedDoc(d)){printDeny();return}
  var t=totals(d),isRepair=d.kind!=='parts';
- var rep=(d.reported||[]).map(function(r,i){return '<tr><td class="c">'+(i+1)+'</td><td>'+h(r.text)+'</td><td class="c">'+apprCell(r.appr)+'</td><td class="c">'+(r.appr==='0'?'✓':'')+'</td></tr>'}).join('');
- var lab=(d.labor||[]).map(function(l,i){return '<tr><td class="c">'+(i+1)+'</td><td>'+h(l.desc)+'</td><td class="c">'+h(l.hours||'')+'</td><td class="c">'+h(l.qty||'')+'</td><td class="r">'+nf(l.price)+'</td><td class="r">'+nf(rowTotal(l))+'</td><td class="c">'+apprCell(l.appr)+'</td><td class="c">'+(l.appr==='0'?'✓':'')+'</td></tr>'}).join('');
- var pts=(d.parts||[]).map(function(p,i){return '<tr><td class="c">'+(i+1)+'</td><td class="mono">'+h(p.code||'')+'</td><td>'+h(p.name)+(p.unit?' <span class="mut">('+h(p.unit)+')</span>':'')+'</td><td class="c">'+nf(p.qty)+'</td><td class="r">'+(p.stock===''||p.stock==null?'-':nf(p.stock))+'</td><td class="c">'+(p.buyQty===''||p.buyQty==null?'-':nf(p.buyQty))+'</td><td class="r">'+nf(p.price)+'</td><td class="r"><b>'+nf((+p.qty||0)*(+p.price||0))+'</b></td><td class="c">'+apprCell(p.appr)+'</td><td class="c">'+(p.appr==='0'?'✓':'')+'</td></tr>'}).join('');
- var css='@page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}body{font:12px "Sarabun",Tahoma,sans-serif;color:#111;margin:0;padding:0 2mm}'+
-  '.co{font-weight:bold;font-size:15px}.addr{font-size:11px;color:#333;line-height:1.45}.ttl{text-align:right}.ttl b{font-size:16px;display:block}.ttl small{font-size:10.5px;color:#444}'+
-  '.head{display:flex;justify-content:space-between;gap:14px;border-bottom:2px solid #b91c1c;padding-bottom:8px}'+
-  '.cust{border:1px solid #bbb;border-radius:4px;padding:6px 8px;margin:8px 0;font-size:11.5px;line-height:1.5}'+
-  '.grid2{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 10px;font-size:11px;margin:8px 0}'+
-  'table{border-collapse:collapse;width:100%;margin:6px 0 10px;font-size:11px}th,td{border:1px solid #999;padding:3px 4px;vertical-align:top}th{background:#fde8e8;font-weight:bold;text-align:center}'+
-  'td.c{text-align:center;white-space:nowrap}td.r{text-align:right;white-space:nowrap}td.mono{font-family:monospace;font-size:10px}'+
-  '.mut{color:#666;font-size:10px}.sec{font-weight:bold;background:#f5f5f5;padding:3px 6px;border-left:3px solid #b91c1c;margin-top:10px;font-size:11.5px}'+
-  '.tot{display:grid;grid-template-columns:1fr 260px;gap:10px;align-items:start}.totbox{border:1px solid #999;padding:6px 8px;font-size:11.5px}.totbox div{display:flex;justify-content:space-between;padding:2px 0}.totbox .sum{border-top:1px solid #333;font-weight:bold;font-size:13px;margin-top:4px;padding-top:4px}'+
-  '.note{border:1px dashed #999;min-height:34px;padding:5px 7px;font-size:11px;white-space:pre-wrap}'+
-  '.sig{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:22px;font-size:10.5px;text-align:center}.sig .line{border-bottom:1px dotted #333;height:34px;margin-bottom:3px}'+
-  '.foot{margin-top:8px;font-size:9.5px;color:#777;display:flex;justify-content:space-between}'+
+ var rep=(d.reported||[]).map(function(r,i){return '<tr><td class="c">'+(i+1)+'</td><td>'+h(r.text)+'</td><td class="c">'+nf(r.qty==null?1:r.qty)+'</td><td class="c">'+apprCell(r.appr)+'</td><td class="c">'+(r.appr==='0'?'✓':'')+'</td></tr>'}).join('');
+ var lab=(d.labor||[]).map(function(l,i){return '<tr><td class="c">'+(i+1)+'</td><td>'+h(l.desc)+'</td><td class="c">'+h(l.hours||'')+'</td><td class="c">'+h(l.qty||'')+'</td><td class="r">'+moneyText(l.price)+'</td><td class="r">'+moneyText(rowTotal(l))+'</td><td class="c">'+apprCell(l.appr)+'</td><td class="c">'+(l.appr==='0'?'✓':'')+'</td></tr>'}).join('');
+ var pts=(d.parts||[]).map(function(p,i){return '<tr><td class="c">'+(i+1)+'</td><td><span class="mono">'+h(p.code||'')+'</span><br>'+h(p.name)+(p.unit?' <span class="mut">('+h(p.unit)+')</span>':'')+'</td><td class="c">'+nf(p.qty)+'</td><td class="r">'+(p.stock===''||p.stock==null?'-':nf(p.stock))+'</td><td class="c">'+(p.buyQty===''||p.buyQty==null?'-':nf(p.buyQty))+'</td><td class="r">'+moneyText(p.price)+'</td><td class="r"><b>'+moneyText(partAmount(p))+'</b></td><td class="c">'+apprCell(p.appr)+'</td><td class="c">'+(p.appr==='0'?'✓':'')+'</td></tr>'}).join('');
+ var css='@page{size:A4 portrait;margin:7mm}*{box-sizing:border-box}body{font:9.5px "Sarabun",Tahoma,sans-serif;color:#111;margin:0;padding:0 1mm;line-height:1.25}'+
+  '.co{font-weight:bold;font-size:13px}.addr{font-size:8.5px;color:#333;line-height:1.3}.ttl{text-align:right}.ttl b{font-size:13px;display:block}.ttl small{font-size:8.5px;color:#444}'+
+  '.head{display:flex;justify-content:space-between;gap:10px;border-bottom:2px solid #b91c1c;padding-bottom:5px}'+
+  '.cust{border:1px solid #bbb;border-radius:4px;padding:4px 6px;margin:5px 0;font-size:8.5px;line-height:1.35}'+
+  '.grid2{display:grid;grid-template-columns:repeat(4,1fr);gap:3px 8px;font-size:8.5px;margin:5px 0}'+
+  'table{border-collapse:collapse;width:100%;margin:3px 0 5px;font-size:8.5px;table-layout:auto}th,td{border:1px solid #999;padding:2px 3px;vertical-align:top}th{background:#fde8e8;font-weight:bold;text-align:center}'+
+  'td.c{text-align:center;white-space:nowrap}td.r,th.r{text-align:right;white-space:nowrap}td.mono{font-family:monospace;font-size:10px}'+
+  '.mono{font-family:monospace;font-size:7.5px}.mut{color:#666;font-size:8px}.sec{font-weight:bold;background:#f5f5f5;padding:2px 5px;border-left:3px solid #b91c1c;margin-top:5px;font-size:9.5px}'+
+  '.tot{display:grid;grid-template-columns:1fr 220px;gap:8px;align-items:start}.totbox{border:1px solid #999;padding:4px 6px;font-size:9px}.totbox div{display:flex;justify-content:space-between;padding:1px 0}.totbox .sum{border-top:1px solid #333;font-weight:bold;font-size:10.5px;margin-top:3px;padding-top:3px}'+
+  '.note{border:1px dashed #999;min-height:28px;padding:4px 6px;font-size:8.5px;white-space:pre-wrap}.sig{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px;font-size:8px;text-align:center}.sig .line{border-bottom:1px dotted #333;height:24px;margin-bottom:2px}'+
+  '.foot{margin-top:5px;font-size:7.5px;color:#777;display:flex;justify-content:space-between}'+
   '.noprint{position:fixed;right:12px;top:12px;z-index:9}.noprint button{font:13px Tahoma;padding:8px 14px;background:#b91c1c;color:#fff;border:0;border-radius:6px;cursor:pointer}'+
-  '@media print{.noprint{display:none}}';
+  'thead{display:table-header-group}tr,.head,.cust,.tot,.sig{break-inside:avoid;page-break-inside:avoid}.sec{break-after:avoid-page;page-break-after:avoid}@media print{.noprint{display:none!important}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}th{background:#fde8e8!important}}';
  var custMeta=(d.signMeta||{}).customer;
  var sig=[['ผู้ออกเอกสาร',d.sign.issuer],['ช่าง/ผู้ประเมิน',d.sign.mechanic],['ฝ่ายสต๊อก/สโตร์',d.sign.store],['ผู้จัดการอู่',d.sign.manager],['ผู้อนุมัติซ่อม/ลูกค้า',d.sign.customer]].map(function(s){return '<div><div class="line">'+(s[1]?'<span style="font-size:11px">'+h(s[1])+'</span>':'')+'</div>'+s[0]+'<br><span style="color:#777">วันที่ ......../......../........</span>'+(s[0]==='ผู้อนุมัติซ่อม/ลูกค้า'&&custMeta?'<br><span style="color:#047857;font-size:8.5px">ลงชื่อในระบบโดย '+h(custMeta.by)+'<br>'+new Date(custMeta.at).toLocaleString('th-TH')+'</span>':'')+'</div>'}).join('');
  var html='<!doctype html><html lang="th"><head><meta charset="utf-8"><title>'+h(d.no)+'</title><style>'+css+'</style></head><body>'+
   '<div class="noprint"><button onclick="window.print()">🖨 พิมพ์ / บันทึก PDF</button></div>'+
   '<div class="head"><div><div class="co">บริษัท พยัคฆ์ขนส่ง จำกัด</div><div class="addr">142 หมู่ 2 ตำบลบ่าอ้อดอนชัย อำเภอเมือง จังหวัดเชียงราย 57000<br>โทร. 085-6950179 · ฝ่ายอู่ซ่อมบำรุง / สโตร์อะไหล่</div></div>'+
-  '<div class="ttl"><b>'+(isRepair?'ใบเสนอราคา / ประเมินราคาเบื้องต้น / ขออนุมัติซ่อม':'ใบเสนอราคา / ใบเสนอขายอะไหล่')+'</b><small>เลขที่ '+h(d.no)+' · วันที่ '+thd(d.date)+'</small><br><small>อ้างอิง '+h(d.ref||'-')+'</small></div></div>'+
+  '<div class="ttl"><b>'+(isRepair?'ใบแจ้งซ่อม / ขออนุมัติซ่อมและจัดซื้อ':'ใบขออนุมัติจัดซื้ออะไหล่')+'</b><small>เลขที่ '+h(d.no)+' · วันที่ '+thd(d.date)+'</small><br><small>อ้างอิง '+h(d.ref||'-')+'</small></div></div>'+
   '<div class="cust"><div><b>ชื่อลูกค้า :</b> '+h(d.customer.name||'-')+'</div><div><b>ที่อยู่ :</b> '+h(d.customer.address||'-')+'</div><div><b>โทร :</b> '+h(d.customer.phone||'-')+'</div></div>'+
   '<div class="grid2">'+
    '<div><b>พนักงานขับรถ :</b> '+h(d.driver||'-')+'</div><div><b>ทะเบียนรถ :</b> '+h(d.headPlate||'-')+(d.trailerPlate?' + '+h(d.trailerPlate):'')+'</div><div><b>เลขกิโลเมตร :</b> '+h(d.odometer||'-')+'</div><div><b>เลขใบงาน :</b> '+h(d.jobId||'-')+'</div>'+
    '<div><b>วันที่เข้าเช็ค :</b> '+thd(d.checkInDate)+' '+h(d.checkInTime||'')+'</div><div><b>วันที่เช็คเสร็จ :</b> '+thd(d.checkOutDate)+' '+h(d.checkOutTime||'')+'</div><div><b>วันที่นัดเข้าซ่อม :</b> '+thd(d.appointDate)+' '+h(d.appointTime||'')+'</div><div><b>กำหนดซ่อมเสร็จ :</b> '+thd(d.dueDate)+' '+h(d.dueTime||'')+'</div>'+
   '</div>'+
-  (isRepair?'<div class="sec">1) รายการแจ้งซ่อม</div><table><thead><tr><th style="width:34px">ที่</th><th>รายการแจ้งซ่อม</th><th style="width:56px">อนุมัติ</th><th style="width:66px">ไม่อนุมัติ</th></tr></thead><tbody>'+(rep||'<tr><td colspan="4" class="c">— ไม่มีรายการ —</td></tr>')+'</tbody></table>':'')+
-  (isRepair?'<div class="sec">2) รายการแก้ไข / ค่าแรง</div><table><thead><tr><th style="width:34px">ที่</th><th>รายการแก้ไข</th><th style="width:52px">ช.ม.<br>มาตรฐาน</th><th style="width:48px">จำนวน</th><th style="width:70px">ราคา<br>ต่อหน่วย</th><th style="width:80px">ราคา</th><th style="width:50px">อนุมัติ</th><th style="width:60px">ไม่อนุมัติ</th></tr></thead><tbody>'+(lab||'<tr><td colspan="8" class="c">— ไม่มีรายการ —</td></tr>')+'</tbody></table>':'')+
-  '<div class="sec">'+(isRepair?'3':'1')+') รายการอะไหล่</div><table><thead><tr><th style="width:34px">ที่</th><th style="width:96px">รหัส</th><th>รายการอะไหล่</th><th style="width:44px">จำนวน</th><th style="width:60px">สต๊อก<br>คงเหลือ</th><th style="width:54px">จำนวน<br>จัดซื้อ</th><th style="width:66px">ราคา<br>ต่อหน่วย</th><th style="width:74px">ราคา<br>(บาท)</th><th style="width:50px">อนุมัติ</th><th style="width:60px">ไม่อนุมัติ</th></tr></thead><tbody>'+(pts||'<tr><td colspan="10" class="c">— ไม่มีรายการ —</td></tr>')+'</tbody></table>'+
-  '<div class="tot"><div><div class="note"><b>หมายเหตุ/รายละเอียดเพิ่มเติม :</b><br>'+h(d.note||'')+'</div>'+(isRepair?'<div style="font-size:10.5px;margin-top:4px"><b>กำหนดชั่วโมงมาตรฐานการซ่อม :</b> '+nf(hoursTotal(d))+' ชั่วโมง</div>':'')+'</div><div class="totbox">'+
+  (isRepair?'<div class="sec">1) รายการแจ้งซ่อม</div><table><thead><tr><th style="width:28px">ที่</th><th>รายการแจ้งซ่อม</th><th style="width:42px">จำนวน</th><th style="width:48px">อนุมัติ</th><th style="width:58px">ไม่อนุมัติ</th></tr></thead><tbody>'+(rep||'<tr><td colspan="5" class="c">— ไม่มีรายการ —</td></tr>')+'</tbody></table>':'')+
+  (isRepair?'<div class="sec">2) รายการแก้ไข (ค่าแรง/งานซ่อม)</div><table><thead><tr><th style="width:28px">ที่</th><th>รายการแก้ไข</th><th style="width:40px">ช.ม.<br>มาตรฐาน</th><th style="width:38px">จำนวน</th><th style="width:54px">ราคาต่อหน่วย</th><th style="width:60px">ราคา</th><th style="width:42px">อนุมัติ</th><th style="width:52px">ไม่อนุมัติ</th></tr></thead><tbody>'+(lab||'<tr><td colspan="8" class="c">— ไม่มีรายการ —</td></tr>')+'</tbody><tfoot><tr><th colspan="5" class="r">รวมสุทธิ</th><th class="r">'+nf(t.labor)+'</th><th colspan="2"></th></tr></tfoot></table>':'')+
+  '<div class="sec">'+(isRepair?'3':'1')+') รายการอะไหล่ (เบิก/จัดซื้อ)</div><table><thead><tr><th style="width:28px">ที่</th><th>รายการอะไหล่</th><th style="width:38px">จำนวน</th><th style="width:48px">สต็อกคงเหลือ</th><th style="width:46px">จำนวนจัดซื้อ</th><th style="width:54px">ราคาต่อหน่วย</th><th style="width:58px">ราคา (บาท)</th><th style="width:42px">อนุมัติ</th><th style="width:52px">ไม่อนุมัติ</th></tr></thead><tbody>'+(pts||'<tr><td colspan="9" class="c">— ไม่มีรายการ —</td></tr>')+'</tbody><tfoot><tr><th colspan="6" class="r">รวมสุทธิ</th><th class="r">'+nf(t.parts)+'</th><th colspan="2"></th></tr></tfoot></table>'+
+  '<div class="tot"><div><div class="note"><b>รายละเอียดเพิ่มเติม :</b><br>'+h(d.note||'')+'</div></div><div class="totbox">'+
+   (isRepair?'<div><span>กำหนดชั่วโมงมาตรฐานการซ่อม</span><b>'+nf(hoursTotal(d))+' ชั่วโมง</b></div>':'')+
    (isRepair?'<div><span>รวมค่าแรง</span><span>'+nf(t.labor)+' ฿</span></div>':'')+
    '<div><span>รวมค่าอะไหล่</span><span>'+nf(t.parts)+' ฿</span></div>'+
    '<div class="sum"><span>รวมสุทธิ</span><span>'+nf(t.grand)+' ฿</span></div>'+
@@ -10463,7 +10534,7 @@ function goView(v){flushSave();st.view=v==='summary'?'summary':'list';st.id='';r
 
 function renderList(){
  var box=document.getElementById('quoteRoot');if(!box)return;
- var all=docs(),L=all.filter(function(d){return !isApprovedDoc(d)}),sum=L.reduce(function(a,d){return a+totals(d).grand},0),pend=L.filter(function(d){return !isApprovedDoc(d)}).length,nApp=all.length-L.length;
+ var all=docs(),L=all.filter(function(d){return !isApprovedDoc(d)}),sum=L.reduce(function(a,d){return safeNum(a+totals(d).grand)},0),pend=L.filter(function(d){return !isApprovedDoc(d)}).length,nApp=all.length-L.length;
  var cust=customers(),idx=storeIdx();
  var jobOpts=jobList().map(function(r){return '<option value="'+h(r.id)+'">'+h(r.id)+' · '+h(r.tractorPlate||'-')+' · '+h(r.jobStatus||'')+'</option>'}).join('');
  var cards=L.length?L.map(function(d){
@@ -10513,9 +10584,9 @@ function renderSummary(){
  L.forEach(function(d){
   var day=String(d.date||'').slice(0,10)||'-',g=totals(normDoc(d)).grand,ap=isApprovedDoc(d);
   var r=map[day]||(map[day]={n:0,g:0,ap:0,apg:0});
-  r.n++;r.g+=g;tAll+=g;
-  if(ap){r.ap++;r.apg+=g;tAppr+=g;nAppr++}else nPend++;
-  if(day===td){nToday++;gToday+=g}
+  r.n++;r.g=safeNum(r.g+g);tAll=safeNum(tAll+g);
+  if(ap){r.ap++;r.apg=safeNum(r.apg+g);tAppr=safeNum(tAppr+g);nAppr++}else nPend++;
+  if(day===td){nToday++;gToday=safeNum(gToday+g)}
  });
  var days=Object.keys(map).sort().reverse().slice(0,31);
  var trs=days.map(function(k){
@@ -10587,9 +10658,43 @@ function renderEditor(){
  var cust=customers(),isRepair=d.kind!=='parts',idx=storeIdx();
  var jobOpts='<option value="">— ไม่ระบุ —</option>'+jobList().map(function(r){return '<option value="'+h(r.id)+'"'+(d.jobId===r.id?' selected':'')+'>'+h(r.id)+' · '+h(r.tractorPlate||'-')+' · '+h(r.jobStatus||'')+'</option>'}).join('');
  var partDl='<datalist id="qgPartDl">'+idx.items.map(function(p){return '<option value="'+h(p.c)+' '+h(p.n)+'">คงเหลือ '+nf(p.st)+' · '+nf(p.p)+' บาท</option>'}).join('')+'</datalist>';
- var repRows=(d.reported||[]).map(function(r,i){return '<tr class="border-b border-slate-100"><td class="px-2 py-1.5 text-center text-slate-400 font-bold">'+(i+1)+'</td><td class="px-1.5 py-1.5"><input value="'+h(r.text)+'" oninput="QG.repSet('+i+',this.value)" class="w-full px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"></td><td class="px-1.5 py-1.5"><select onchange="QG.repAppr('+i+',this.value)" class="px-1.5 py-1 rounded-lg border border-slate-300 text-[11px] bg-white">'+apprOpts(r.appr)+'</select></td><td class="px-1 py-1.5 text-center"><button onclick="QG.repDel('+i+')" class="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs"><i class="fa-solid fa-xmark"></i></button></td></tr>'}).join('');
- var labRows=(d.labor||[]).map(function(l,i){return '<tr class="border-b border-slate-100"><td class="px-2 py-1.5 text-center text-slate-400 font-bold">'+(i+1)+'</td><td class="px-1.5 py-1.5"><input value="'+h(l.desc)+'" oninput="QG.labSet('+i+',\'desc\',this.value)" class="w-full min-w-[170px] px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"></td><td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+h(l.hours)+'" onchange="QG.labSet('+i+',\'hours\',this.value)" class="w-16 px-1 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs text-center"></td><td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+h(l.qty)+'" onchange="QG.labSet('+i+',\'qty\',this.value)" class="w-16 px-1 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs text-center"></td><td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+h(l.price)+'" onchange="QG.labSet('+i+',\'price\',this.value)" class="w-24 px-1 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs text-right"></td><td id="qgLabRow'+i+'" class="px-2 py-1.5 text-right font-extrabold text-slate-800 whitespace-nowrap">'+nf(rowTotal(l))+' ฿</td><td class="px-1 py-1.5"><select onchange="QG.labAppr('+i+',this.value)" class="px-1.5 py-1 rounded-lg border border-slate-300 text-[11px] bg-white">'+apprOpts(l.appr)+'</select></td><td class="px-1 py-1.5 text-center"><button onclick="QG.labDel('+i+')" class="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs"><i class="fa-solid fa-xmark"></i></button></td></tr>'}).join('');
- var ptRows=(d.parts||[]).map(function(p,i){return '<tr class="border-b border-slate-100"><td class="px-2 py-1.5 text-center text-slate-400 font-bold">'+(i+1)+'</td><td class="px-1 py-1.5"><input value="'+h(p.code)+'" list="qgPartDl" onchange="QG.partLookup('+i+',\'code\',this.value)" placeholder="รหัส" class="w-28 px-1 py-1 bg-slate-50 border border-slate-300 rounded-lg font-mono text-[10px]"></td><td class="px-1 py-1.5"><input value="'+h(p.name)+'" list="qgPartDl" onchange="QG.partLookup('+i+',\'name\',this.value)" class="w-full min-w-[180px] px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"></td><td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+h(p.qty)+'" onchange="QG.partSet('+i+',\'qty\',this.value)" class="w-16 px-1 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs text-center"></td><td class="px-1 py-1.5 text-center text-xs '+(p.stock!==''&&p.stock!=null&&+p.stock<+(p.qty||0)?'text-red-600 font-bold':'text-slate-600')+'">'+(p.stock===''||p.stock==null?'-':nf(p.stock))+'</td><td class="px-1 py-1.5"><input id="qgBuy'+i+'" type="number" step="any" min="0" value="'+(p.buyQty===''||p.buyQty==null?'':h(p.buyQty))+'" onchange="QG.partSet('+i+',\'buyQty\',this.value)" class="w-16 px-1 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs text-center"></td><td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+h(p.price)+'" onchange="QG.partSet('+i+',\'price\',this.value)" class="w-24 px-1 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs text-right"></td><td id="qgPartRow'+i+'" class="px-2 py-1.5 text-right font-extrabold text-slate-800 whitespace-nowrap">'+nf((+p.qty||0)*(+p.price||0))+' ฿</td><td class="px-1 py-1.5"><select onchange="QG.partAppr('+i+',this.value)" class="px-1.5 py-1 rounded-lg border border-slate-300 text-[11px] bg-white">'+apprOpts(p.appr)+'</select></td><td class="px-1 py-1.5 text-center"><button onclick="QG.partDel('+i+')" class="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs"><i class="fa-solid fa-xmark"></i></button></td></tr>'}).join('');
+ var repRows=(d.reported||[]).map(function(r,i){
+  return '<tr id="qgRepWrap'+i+'" class="border-b border-slate-100">'+
+   '<td class="px-2 py-1.5 text-center text-slate-400 font-bold">'+(i+1)+'</td>'+
+   '<td class="px-1.5 py-1.5"><input value="'+h(r.text)+'" oninput="QG.repSet('+i+',this.value)" class="w-full min-w-[150px] px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white outline-none"></td>'+
+   '<td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+h(r.qty)+'" oninput="QG.repQty('+i+',this.value)" onchange="QG.repQty('+i+',this.value)" onkeyup="QG.repQty('+i+',this.value)" class="w-16 px-1 py-1 border border-slate-300 rounded-lg text-xs text-center"></td>'+
+   '<td class="px-1 py-1.5 text-center"><input type="checkbox" aria-label="อนุมัติรายการแจ้งซ่อม '+(i+1)+'" onchange="QG.repAppr('+i+',\'1\',this.checked)"'+(r.appr==='1'?' checked':'')+'></td>'+
+   '<td class="px-1 py-1.5 text-center"><input type="checkbox" aria-label="ไม่อนุมัติรายการแจ้งซ่อม '+(i+1)+'" onchange="QG.repAppr('+i+',\'0\',this.checked)"'+(r.appr==='0'?' checked':'')+'></td>'+
+   '<td class="px-1 py-1.5 text-center"><button type="button" onclick="QG.repDel('+i+')" class="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs" aria-label="ลบรายการแจ้งซ่อม"><i class="fa-solid fa-xmark"></i></button></td>'+
+  '</tr>';
+ }).join('');
+ var labRows=(d.labor||[]).map(function(l,i){
+  return '<tr id="qgLabWrap'+i+'" class="border-b border-slate-100">'+
+   '<td class="px-2 py-1.5 text-center text-slate-400 font-bold">'+(i+1)+'</td>'+
+   '<td class="px-1.5 py-1.5"><input value="'+h(l.desc)+'" oninput="QG.labSet('+i+',\'desc\',this.value)" class="w-full min-w-[150px] px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white outline-none"></td>'+
+   '<td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+h(l.hours)+'" oninput="QG.labSet('+i+',\'hours\',this.value)" onchange="QG.labSet('+i+',\'hours\',this.value)" onkeyup="QG.labSet('+i+',\'hours\',this.value)" class="w-16 px-1 py-1 border border-slate-300 rounded-lg text-xs text-center"></td>'+
+   '<td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+h(l.qty)+'" oninput="QG.labSet('+i+',\'qty\',this.value)" onchange="QG.labSet('+i+',\'qty\',this.value)" onkeyup="QG.labSet('+i+',\'qty\',this.value)" class="w-16 px-1 py-1 border border-slate-300 rounded-lg text-xs text-center"></td>'+
+   '<td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+priceInput(l.price)+'" oninput="QG.labSet('+i+',\'price\',this.value)" onchange="QG.labSet('+i+',\'price\',this.value)" onkeyup="QG.labSet('+i+',\'price\',this.value)" class="w-24 px-1 py-1 border border-slate-300 rounded-lg text-xs text-right"></td>'+
+   '<td id="qgLabRow'+i+'" class="px-2 py-1.5 text-right font-extrabold text-slate-800 whitespace-nowrap">'+moneyText(rowTotal(l),' ฿')+'</td>'+
+   '<td class="px-1 py-1.5 text-center"><input type="checkbox" aria-label="อนุมัติรายการแก้ไข '+(i+1)+'" onchange="QG.labAppr('+i+',\'1\',this.checked)"'+(l.appr==='1'?' checked':'')+'></td>'+
+   '<td class="px-1 py-1.5 text-center"><input type="checkbox" aria-label="ไม่อนุมัติรายการแก้ไข '+(i+1)+'" onchange="QG.labAppr('+i+',\'0\',this.checked)"'+(l.appr==='0'?' checked':'')+'></td>'+
+   '<td class="px-1 py-1.5 text-center"><button type="button" onclick="QG.labDel('+i+')" class="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs" aria-label="ลบรายการแก้ไข"><i class="fa-solid fa-xmark"></i></button></td>'+
+  '</tr>';
+ }).join('');
+ var ptRows=(d.parts||[]).map(function(p,i){
+  return '<tr id="qgPartWrap'+i+'" class="border-b border-slate-100">'+
+   '<td class="px-2 py-1.5 text-center text-slate-400 font-bold">'+(i+1)+'</td>'+
+   '<td class="px-1 py-1.5"><div class="font-mono text-[9px] text-slate-400">'+h(p.code||'')+'</div><input value="'+h(p.name)+'" list="qgPartDl" oninput="QG.partNameInput('+i+',this.value)" onchange="QG.partLookup('+i+',\'name\',this.value)" placeholder="ค้นหาชื่อหรือรหัสอะไหล่" class="w-full min-w-[160px] px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold focus:bg-white outline-none"></td>'+
+   '<td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+h(p.qty)+'" oninput="QG.partSet('+i+',\'qty\',this.value)" onchange="QG.partSet('+i+',\'qty\',this.value)" onkeyup="QG.partSet('+i+',\'qty\',this.value)" class="w-16 px-1 py-1 border border-slate-300 rounded-lg text-xs text-center"></td>'+
+   '<td class="px-1 py-1.5 text-center text-xs '+(p.stock!==''&&p.stock!=null&&+p.stock<+(p.qty||0)?'text-red-600 font-bold':'text-slate-600')+'">'+(p.stock===''||p.stock==null?'-':nf(p.stock))+'</td>'+
+   '<td class="px-1 py-1.5"><input id="qgBuy'+i+'" type="number" step="any" min="0" value="'+(p.buyQty===''||p.buyQty==null?'':h(p.buyQty))+'" oninput="QG.partSet('+i+',\'buyQty\',this.value)" onchange="QG.partSet('+i+',\'buyQty\',this.value)" onkeyup="QG.partSet('+i+',\'buyQty\',this.value)" class="w-16 px-1 py-1 border border-slate-300 rounded-lg text-xs text-center"></td>'+
+   '<td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+priceInput(p.price)+'" oninput="QG.partSet('+i+',\'price\',this.value)" onchange="QG.partSet('+i+',\'price\',this.value)" onkeyup="QG.partSet('+i+',\'price\',this.value)" class="w-24 px-1 py-1 border border-slate-300 rounded-lg text-xs text-right"></td>'+
+   '<td id="qgPartRow'+i+'" class="px-2 py-1.5 text-right font-extrabold text-slate-800 whitespace-nowrap">'+moneyText(partAmount(p),' ฿')+'</td>'+
+   '<td class="px-1 py-1.5 text-center"><input type="checkbox" aria-label="อนุมัติรายการอะไหล่ '+(i+1)+'" onchange="QG.partAppr('+i+',\'1\',this.checked)"'+(p.appr==='1'?' checked':'')+'></td>'+
+   '<td class="px-1 py-1.5 text-center"><input type="checkbox" aria-label="ไม่อนุมัติรายการอะไหล่ '+(i+1)+'" onchange="QG.partAppr('+i+',\'0\',this.checked)"'+(p.appr==='0'?' checked':'')+'></td>'+
+   '<td class="px-1 py-1.5 text-center"><button type="button" onclick="QG.partDel('+i+')" class="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs" aria-label="ลบรายการอะไหล่"><i class="fa-solid fa-xmark"></i></button></td>'+
+  '</tr>';
+ }).join('');
  var t=totals(d);
  box.innerHTML=
   '<div class="bg-white rounded-2xl p-3 shadow-sm border border-slate-200 flex flex-wrap items-center gap-2">'+
@@ -10601,7 +10706,6 @@ function renderEditor(){
    '<span id="qgSaved" class="text-[10px] text-slate-400">'+(d.storeReq?'· ส่งสโตร์แล้ว '+h(d.storeReq):'')+'</span>'+
    '<div class="ml-auto flex flex-wrap items-center gap-1.5">'+adminChip()+
     '<button onclick="QG.saveNow()" class="px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-700 text-xs font-bold"><i class="fa-solid fa-floppy-disk mr-1"></i>บันทึก</button>'+
-    '<button onclick="QG.sendParts()" class="px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold"><i class="fa-solid fa-paper-plane mr-1"></i>ส่งอะไหล่ไปสโตร์</button>'+
     '<button id="qgPrintBtn" onclick="QG.printDoc()" title="'+(isApprovedDoc(d)?'พิมพ์ / บันทึก PDF':'ต้องได้รับการอนุมัติจากแอดมินก่อนพิมพ์')+'" class="px-3 py-2 rounded-xl text-xs font-bold '+(isApprovedDoc(d)?'bg-slate-900 hover:bg-slate-800 text-white':'bg-slate-100 text-slate-400 border border-slate-300')+'">'+(isApprovedDoc(d)?'<i class="fa-solid fa-print mr-1"></i>พิมพ์ / PDF':'<i class="fa-solid fa-lock mr-1"></i>พิมพ์ / PDF (รออนุมัติ)')+'</button>'+
     '<button onclick="QG.delCur()" class="px-2.5 py-2 rounded-xl bg-red-50 text-red-600 border border-red-200 text-xs"><i class="fa-solid fa-trash"></i></button>'+
    '</div>'+
@@ -10611,10 +10715,14 @@ function renderEditor(){
     '<div><div class="text-base font-extrabold text-slate-900">บริษัท พยัคฆ์ขนส่ง จำกัด</div><div class="text-[11px] text-slate-500 leading-relaxed">142 หมู่ 2 ตำบลบ่าอ้อดอนชัย อำเภอเมือง จังหวัดเชียงราย 57000<br>โทร. 085-6950179 · ฝ่ายอู่ซ่อมบำรุง / สโตร์อะไหล่</div></div>'+
     '<div class="text-right"><div class="text-sm font-extrabold text-red-700">'+(isRepair?'ใบเสนอราคา / ประเมินราคาเบื้องต้น / ขออนุมัติซ่อม':'ใบเสนอราคา / ใบเสนอขายอะไหล่')+'</div><div class="text-[11px] text-slate-500">เลขที่ '+h(d.no)+'</div></div>'+
    '</div>'+
-   '<div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">'+
-    '<label class="text-[11px] font-bold text-slate-600">วันที่<input type="date" value="'+h(d.date)+'" onchange="QG.set(\'date\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
-    '<label class="text-[11px] font-bold text-slate-600">เลขที่อ้างอิง<input value="'+h(d.ref)+'" oninput="QG.set(\'ref\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
-    '<label class="text-[11px] font-bold text-slate-600">อ้างอิงใบงาน<select onchange="QG.pickJob(this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs">'+jobOpts+'</select></label>'+
+   '<div class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2 mt-3">'+
+    '<label class="text-[11px] font-bold text-slate-600">พนักงานขับรถ<input value="'+h(d.driver)+'" oninput="QG.set(\'driver\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+    '<label class="text-[11px] font-bold text-slate-600">ทะเบียนรถ<input value="'+h(d.headPlate)+'" oninput="QG.set(\'headPlate\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+    '<label class="text-[11px] font-bold text-slate-600">เลขกิโลเมตร<input value="'+h(d.odometer)+'" oninput="QG.set(\'odometer\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+    '<label class="text-[11px] font-bold text-slate-600">วันที่นัดเข้าซ่อม<input type="date" value="'+h(d.appointDate)+'" onchange="QG.set(\'appointDate\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+    '<label class="text-[11px] font-bold text-slate-600">เวลา (นัดเข้า)<input type="time" value="'+h(d.appointTime)+'" onchange="QG.set(\'appointTime\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+    '<label class="text-[11px] font-bold text-slate-600">กำหนดวันซ่อมเสร็จ<input type="date" value="'+h(d.dueDate)+'" onchange="QG.set(\'dueDate\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+    '<label class="text-[11px] font-bold text-slate-600">เวลา (ซ่อมเสร็จ)<input type="time" value="'+h(d.dueTime)+'" onchange="QG.set(\'dueTime\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
    '</div>'+
    '<div class="mt-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-2">'+
     '<div class="grid grid-cols-1 sm:grid-cols-3 gap-2">'+
@@ -10623,41 +10731,54 @@ function renderEditor(){
     '</div>'+
     '<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">'+
      '<label class="text-[11px] font-bold text-slate-600">โทร<input id="qgCustPhone" value="'+h(d.customer.phone)+'" oninput="QG.set(\'customerPhone\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
-     '<label class="text-[11px] font-bold text-slate-600">พนักงานขับรถ<input value="'+h(d.driver)+'" oninput="QG.set(\'driver\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
-     '<label class="text-[11px] font-bold text-slate-600">ทะเบียนหัวลาก<input value="'+h(d.headPlate)+'" oninput="QG.set(\'headPlate\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
      '<label class="text-[11px] font-bold text-slate-600">ทะเบียนหางพ่วง<input value="'+h(d.trailerPlate)+'" oninput="QG.set(\'trailerPlate\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
-    '</div>'+
-    '<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">'+
-     '<label class="text-[11px] font-bold text-slate-600">เลขกิโลเมตร<input value="'+h(d.odometer)+'" oninput="QG.set(\'odometer\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+     '<label class="text-[11px] font-bold text-slate-600">วันที่ออกเอกสาร<input type="date" value="'+h(d.date)+'" onchange="QG.set(\'date\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+     '<label class="text-[11px] font-bold text-slate-600">เลขที่อ้างอิง<input value="'+h(d.ref)+'" oninput="QG.set(\'ref\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+     '<label class="text-[11px] font-bold text-slate-600">อ้างอิงใบงาน<select onchange="QG.pickJob(this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs">'+jobOpts+'</select></label>'+
      '<label class="text-[11px] font-bold text-slate-600">วันที่เข้าเช็ค<input type="date" value="'+h(d.checkInDate)+'" onchange="QG.set(\'checkInDate\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
-     '<label class="text-[11px] font-bold text-slate-600">เวลา<input type="time" value="'+h(d.checkInTime)+'" onchange="QG.set(\'checkInTime\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+     '<label class="text-[11px] font-bold text-slate-600">เวลาเข้าเช็ค<input type="time" value="'+h(d.checkInTime)+'" onchange="QG.set(\'checkInTime\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
      '<label class="text-[11px] font-bold text-slate-600">วันที่เช็คเสร็จ<input type="date" value="'+h(d.checkOutDate)+'" onchange="QG.set(\'checkOutDate\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
-    '</div>'+
-    '<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">'+
-     '<label class="text-[11px] font-bold text-slate-600">วันที่นัดเข้าซ่อม<input type="date" value="'+h(d.appointDate)+'" onchange="QG.set(\'appointDate\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
-     '<label class="text-[11px] font-bold text-slate-600">เวลา<input type="time" value="'+h(d.appointTime)+'" onchange="QG.set(\'appointTime\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
-     '<label class="text-[11px] font-bold text-slate-600">กำหนดซ่อมเสร็จ<input type="date" value="'+h(d.dueDate)+'" onchange="QG.set(\'dueDate\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
-     '<label class="text-[11px] font-bold text-slate-600">เวลา<input type="time" value="'+h(d.dueTime)+'" onchange="QG.set(\'dueTime\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+     '<label class="text-[11px] font-bold text-slate-600">เวลาเช็คเสร็จ<input type="time" value="'+h(d.checkOutTime)+'" onchange="QG.set(\'checkOutTime\',this.value)" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
     '</div>'+
    '</div>'+
    (d.jobId?'<div class="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2"><span class="text-[11px] font-bold text-amber-800"><i class="fa-solid fa-link mr-1"></i>ผูกกับใบงาน '+h(d.jobId)+'</span><button onclick="QG.pullJobItems()" class="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold">ดึงรายการซ่อม/อะไหล่จากใบงาน</button><span class="text-[10px] text-amber-700">(แทนที่รายการที่มีอยู่ — ราคา/สต็อกดึงจากสโตร์)</span></div>':'')+
    (isRepair?'<div class="mt-4"><div class="flex items-center justify-between"><div class="text-xs font-extrabold text-slate-700"><i class="fa-solid fa-clipboard-list text-amber-500 mr-1"></i>1) รายการแจ้งซ่อม</div><span class="text-[10px] text-slate-400">'+(d.reported||[]).length+' รายการ</span></div>'+
-    '<div class="overflow-x-auto mt-1"><table class="w-full text-xs"><thead class="bg-slate-100 text-slate-600"><tr><th class="py-1.5 px-2 w-10">ที่</th><th class="py-1.5 px-2">รายการแจ้งซ่อม</th><th class="py-1.5 px-2 w-24">ผลอนุมัติ</th><th class="py-1.5 px-2 w-10"></th></tr></thead><tbody>'+(repRows||'<tr><td colspan="4" class="py-3 text-center text-slate-400 text-[11px]">ยังไม่มีรายการ — พิมพ์เพิ่มด้านล่าง</td></tr>')+'</tbody></table></div>'+
-    '<div class="flex gap-1.5 mt-1.5"><input id="qgRepAdd" placeholder="พิมพ์รายการแจ้งซ่อม แล้วกด Enter..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.repAdd()}" class="flex-grow px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs"><button onclick="QG.repAdd()" class="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold">เพิ่ม</button></div></div>':'')+
+    '<div class="overflow-x-auto mt-1"><table class="w-full text-xs"><thead class="bg-slate-100 text-slate-600"><tr><th class="py-1.5 px-2 w-10">ที่</th><th class="py-1.5 px-2">รายการแจ้งซ่อม</th><th class="py-1.5 px-2 w-20">จำนวน</th><th class="py-1.5 px-2 w-20">อนุมัติ</th><th class="py-1.5 px-2 w-24">ไม่อนุมัติ</th><th class="py-1.5 px-2 w-10"></th></tr></thead><tbody>'+(repRows||'<tr><td colspan="6" class="py-3 text-center text-slate-400 text-[11px]">ยังไม่มีรายการ — พิมพ์เพิ่มด้านล่าง</td></tr>')+'</tbody></table></div>'+
+    '<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 mt-2 rounded-xl border border-amber-100 bg-amber-50/40 p-2">'+
+     '<label class="text-[10px] font-bold text-slate-600 xl:col-span-2">รายการแจ้งซ่อม<input id="qgRepNewDesc" placeholder="กรอกรายการแจ้งซ่อม" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.repAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">จำนวน<input id="qgRepNewQty" type="number" step="any" min="0" value="1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.repAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">สถานะเริ่มต้น<select id="qgRepNewAppr" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.repAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"><option value="">รออนุมัติ</option><option value="1">อนุมัติ</option><option value="0">ไม่อนุมัติ</option></select></label>'+
+     '<button type="button" onclick="QG.repAdd()" class="sm:col-span-2 xl:col-span-4 px-3 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold">+ เพิ่มรายการแจ้งซ่อม</button>'+
+    '</div></div>':'')+
    (isRepair?'<div class="mt-4"><div class="flex flex-wrap items-center justify-between gap-2"><div class="text-xs font-extrabold text-slate-700"><i class="fa-solid fa-screwdriver-wrench text-amber-500 mr-1"></i>2) รายการแก้ไข / ค่าแรง</div>'+
-    '<div class="flex items-center gap-1.5 text-[10px] text-slate-500">ราคา/ชม.<input id="qgRate" type="number" step="any" min="0" placeholder="0" class="w-20 px-1.5 py-1 border border-slate-300 rounded-lg text-xs text-right"><button onclick="QG.labRate()" class="px-2 py-1 rounded-lg bg-slate-100 border border-slate-300 font-bold">ใช้ทุกบรรทัด</button></div></div>'+
-    '<div class="overflow-x-auto mt-1"><table class="w-full text-xs"><thead class="bg-slate-100 text-slate-600"><tr><th class="py-1.5 px-2 w-10">ที่</th><th class="py-1.5 px-2 min-w-[170px]">รายการแก้ไข</th><th class="py-1.5 px-1 w-16">ช.ม.</th><th class="py-1.5 px-1 w-16">จำนวน</th><th class="py-1.5 px-1 w-24">ราคา/หน่วย</th><th class="py-1.5 px-2 w-24">ราคา</th><th class="py-1.5 px-1 w-24">ผลอนุมัติ</th><th class="py-1.5 px-1 w-10"></th></tr></thead><tbody>'+(labRows||'<tr><td colspan="8" class="py-3 text-center text-slate-400 text-[11px]">ยังไม่มีรายการ</td></tr>')+'</tbody></table></div>'+
-    '<div class="flex gap-1.5 mt-1.5"><input id="qgLabAdd" list="qgCauseDl" placeholder="พิมพ์งานแก้ไข หรือเลือกจากสาเหตุการซ่อม Excel..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="flex-grow px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs"><button onclick="QG.labAdd()" class="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold">เพิ่ม</button></div></div>':'')+
+    '<div class="flex items-center gap-1.5 text-[10px] text-slate-500">ราคา/ชม.<input id="qgRate" type="number" step="any" min="0" placeholder="0" oninput="QG.labDraftCalc()" onchange="QG.labDraftCalc()" onkeyup="QG.labDraftCalc()" class="w-20 px-1.5 py-1 border border-slate-300 rounded-lg text-xs text-right"><button onclick="QG.labRate()" class="px-2 py-1 rounded-lg bg-slate-100 border border-slate-300 font-bold">ใช้ทุกบรรทัด</button></div></div>'+
+    '<div class="overflow-x-auto mt-1"><table class="w-full text-xs"><thead class="bg-slate-100 text-slate-600"><tr><th class="py-1.5 px-2 w-10">ที่</th><th class="py-1.5 px-2 min-w-[150px]">รายการแก้ไข</th><th class="py-1.5 px-1 w-16">ช.ม. มาตรฐาน</th><th class="py-1.5 px-1 w-16">จำนวน</th><th class="py-1.5 px-1 w-24">ราคาต่อหน่วย</th><th class="py-1.5 px-2 w-24">ราคา</th><th class="py-1.5 px-1 w-20">อนุมัติ</th><th class="py-1.5 px-1 w-24">ไม่อนุมัติ</th><th class="py-1.5 px-1 w-10"></th></tr></thead><tbody>'+(labRows||'<tr><td colspan="9" class="py-3 text-center text-slate-400 text-[11px]">ยังไม่มีรายการ</td></tr>')+'</tbody><tfoot class="bg-slate-50 border-t border-slate-300"><tr><td colspan="5" class="px-2 py-2 text-right font-bold">รวมสุทธิ (รายการแก้ไข)</td><td id="qgTotLabor" class="px-2 py-2 text-right font-extrabold text-slate-800">'+nf(t.labor)+' ฿</td><td colspan="3"></td></tr></tfoot></table></div>'+
+    '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-2 mt-2 rounded-xl border border-amber-100 bg-amber-50/40 p-2">'+
+     '<label class="text-[10px] font-bold text-slate-600 xl:col-span-2">รายการแก้ไข<input id="qgLabNewDesc" list="qgCauseDl" placeholder="พิมพ์งานหรือเลือกสาเหตุการซ่อม" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">ช.ม. มาตรฐาน<input id="qgLabNewHours" type="number" step="any" min="0" value="1" oninput="QG.labDraftCalc()" onchange="QG.labDraftCalc()" onkeyup="QG.labDraftCalc()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">จำนวน<input id="qgLabNewQty" type="number" step="any" min="0" value="1" oninput="QG.labDraftCalc()" onchange="QG.labDraftCalc()" onkeyup="QG.labDraftCalc()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">ราคาต่อหน่วย<input id="qgLabNewPrice" type="number" step="any" min="0" oninput="QG.labDraftCalc()" onchange="QG.labDraftCalc()" onkeyup="QG.labDraftCalc()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-right"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">ยอดรวมพรีวิว<output id="qgLabNewTotal" class="block mt-0.5 px-2 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-extrabold text-right">-</output></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">สถานะเริ่มต้น<select id="qgLabNewAppr" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"><option value="">รออนุมัติ</option><option value="1">อนุมัติ</option><option value="0">ไม่อนุมัติ</option></select></label>'+
+     '<button type="button" onclick="QG.labAdd()" class="px-3 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold">+ เพิ่มรายการ</button>'+
+    '</div></div>':'')+
    '<div class="mt-4"><div class="flex flex-wrap items-center justify-between gap-2"><div class="text-xs font-extrabold text-slate-700"><i class="fa-solid fa-boxes-stacked text-amber-500 mr-1"></i>'+(isRepair?'3':'1')+') รายการอะไหล่ <span class="font-normal text-[10px] text-slate-400">· สต็อก/ราคาจาก'+(idx.live?'สโตร์ (ข้อมูลสด)':'Excel สำรอง')+'</span></div><span class="text-[10px] text-slate-400">'+(d.parts||[]).length+' รายการ</span></div>'+
-    '<div class="overflow-x-auto mt-1"><table class="w-full text-xs"><thead class="bg-slate-100 text-slate-600"><tr><th class="py-1.5 px-2 w-10">ที่</th><th class="py-1.5 px-1 w-28">รหัส</th><th class="py-1.5 px-2 min-w-[180px]">รายการอะไหล่</th><th class="py-1.5 px-1 w-16">จำนวน</th><th class="py-1.5 px-1 w-16">คงเหลือ</th><th class="py-1.5 px-1 w-16">จัดซื้อ</th><th class="py-1.5 px-1 w-24">ราคา/หน่วย</th><th class="py-1.5 px-2 w-24">ราคา</th><th class="py-1.5 px-1 w-24">ผลอนุมัติ</th><th class="py-1.5 px-1 w-10"></th></tr></thead><tbody>'+(ptRows||'<tr><td colspan="10" class="py-3 text-center text-slate-400 text-[11px]">ยังไม่มีรายการ — พิมพ์รหัส/ชื่ออะไหล่ด้านล่าง</td></tr>')+'</tbody></table></div>'+
-    '<div class="flex gap-1.5 mt-1.5"><input id="qgPartAdd" list="qgPartDl" placeholder="พิมพ์รหัส/ชื่ออะไหล่ แล้วเลือกจากรายการ..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.partAdd()}" class="flex-grow px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs"><button onclick="QG.partAdd()" class="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold">เพิ่ม</button></div>'+
-    '<div class="text-[10px] text-slate-400 mt-1">แก้รหัส/ชื่อแล้วกด Tab เพื่อจับคู่กับสโตร์อีกครั้ง · จำนวนจัดซื้อคำนวณจาก “จำนวน − คงเหลือ” ให้อัตโนมัติ</div></div>'+
+    '<div class="overflow-x-auto mt-1"><table class="w-full text-xs"><thead class="bg-slate-100 text-slate-600"><tr><th class="py-1.5 px-2 w-10">ที่</th><th class="py-1.5 px-2 min-w-[170px]">รายการอะไหล่</th><th class="py-1.5 px-1 w-16">จำนวน</th><th class="py-1.5 px-1 w-20">สต็อกคงเหลือ</th><th class="py-1.5 px-1 w-20">จำนวนจัดซื้อ</th><th class="py-1.5 px-1 w-24">ราคาต่อหน่วย</th><th class="py-1.5 px-2 w-24">ราคา (บาท)</th><th class="py-1.5 px-1 w-20">อนุมัติ</th><th class="py-1.5 px-1 w-24">ไม่อนุมัติ</th><th class="py-1.5 px-1 w-10"></th></tr></thead><tbody>'+(ptRows||'<tr><td colspan="10" class="py-3 text-center text-slate-400 text-[11px]">ยังไม่มีรายการ — พิมพ์รหัส/ชื่ออะไหล่ด้านล่าง</td></tr>')+'</tbody><tfoot class="bg-slate-50 border-t border-slate-300"><tr><td colspan="6" class="px-2 py-2 text-right font-bold">รวมสุทธิ (รายการอะไหล่)</td><td id="qgTotParts" class="px-2 py-2 text-right font-extrabold text-slate-800">'+nf(t.parts)+' ฿</td><td colspan="3"></td></tr></tfoot></table></div>'+
+    '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-2 mt-2 rounded-xl border border-amber-100 bg-amber-50/40 p-2">'+
+     '<label class="text-[10px] font-bold text-slate-600 xl:col-span-2">ค้นหา/เลือกอะไหล่<input id="qgPartNewName" list="qgPartDl" placeholder="พิมพ์ชื่อหรือรหัส แล้วเลือกจากสโตร์" oninput="QG.partDraftLookup()" onchange="QG.partDraftLookup()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.partAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">จำนวนที่เบิกใช้<input id="qgPartNewQty" type="number" step="any" min="0" value="1" oninput="QG.partDraftQtyChanged()" onchange="QG.partDraftQtyChanged()" onkeyup="QG.partDraftQtyChanged()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.partAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">สต็อกคงเหลือ<input id="qgPartNewStock" value="-" readonly tabindex="-1" class="w-full mt-0.5 px-2 py-1.5 border border-slate-200 rounded-lg bg-slate-100 text-xs text-center"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">จำนวนจัดซื้อ<input id="qgPartNewBuy" type="number" step="any" min="0" oninput="QG.partDraftBuyChanged()" onchange="QG.partDraftBuyChanged()" onkeyup="QG.partDraftBuyChanged()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.partAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">ราคาต่อหน่วย<input id="qgPartNewPrice" type="number" step="any" min="0" oninput="QG.partDraftCalc()" onchange="QG.partDraftCalc()" onkeyup="QG.partDraftCalc()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.partAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-right"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">ยอดรวมพรีวิว<output id="qgPartNewTotal" class="block mt-0.5 px-2 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-extrabold text-right">-</output></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">สถานะเริ่มต้น<select id="qgPartNewAppr" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.partAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"><option value="">รออนุมัติ</option><option value="1">อนุมัติ</option><option value="0">ไม่อนุมัติ</option></select></label>'+
+     '<button type="button" onclick="QG.partAdd()" class="xl:col-span-8 px-3 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold">+ เพิ่มรายการอะไหล่</button>'+
+    '</div>'+
+    '<div class="text-[10px] text-slate-400 mt-1">เลือกรหัส/ชื่อเพื่อดึงสต็อกและราคาจากสโตร์ · จำนวนจัดซื้อปรับตามสต็อกได้ และแก้ไขเองได้</div></div>'+
    '<div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">'+
     '<div><div class="text-[11px] font-bold text-slate-600 mb-1">หมายเหตุ/รายละเอียดเพิ่มเติม</div><textarea oninput="QG.set(\'note\',this.value)" rows="4" class="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs">'+h(d.note)+'</textarea></div>'+
     '<div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">'+
-     (isRepair?'<div class="flex justify-between py-0.5"><span>รวมค่าแรง</span><b id="qgTotLabor">'+nf(t.labor)+' ฿</b></div>':'')+
-     '<div class="flex justify-between py-0.5"><span>รวมค่าอะไหล่</span><b id="qgTotParts">'+nf(t.parts)+' ฿</b></div>'+
-     (isRepair?'<div class="flex justify-between py-0.5 text-[10.5px] text-slate-500"><span>กำหนดชั่วโมงมาตรฐานการซ่อม</span><span id="qgTotHours">'+nf(hoursTotal(d))+' ชม.</span></div>':'')+
+     (isRepair?'<div class="flex justify-end py-0.5 text-[11px] font-bold text-slate-600"><span>กำหนดชั่วโมงมาตรฐานการซ่อม :&nbsp;</span><span id="qgTotHours">'+nf(hoursTotal(d))+' ชั่วโมง</span></div>':'')+
      '<div class="flex justify-between py-1 mt-1 border-t border-slate-300 text-sm"><span class="font-bold">รวมสุทธิ</span><b class="text-emerald-700" id="qgTotAll">'+nf(t.grand)+' ฿</b></div>'+
      '<div class="flex justify-between py-0.5 text-[10.5px] text-red-600"><span>รายการที่ไม่อนุมัติ</span><span id="qgTotRej">'+nf(t.rej)+' ฿</span></div>'+
     '</div>'+
@@ -10679,10 +10800,11 @@ function printFrom(id){
 
 window.QG={render:render,newDoc:newDoc,openDoc:openDoc,back:back,del:del,delCur:delCur,status:setStatus,setStatus:setStatus,set:set,setSign:setSign,custPick:custPick,kind:kind,goView:goView,
  pickJob:pickJob,pullJobItems:pullJobItems,quickFromJob:quickFromJob,
- repAdd:repAdd,repSet:repSet,repAppr:repAppr,repDel:repDel,
- labAdd:labAdd,labSet:labSet,labAppr:labAppr,labDel:labDel,labRate:labRate,
- partAdd:partAdd,partSet:partSet,partAppr:partAppr,partDel:partDel,partLookup:partLookup,
- sendParts:sendParts,printDoc:printDoc,printFrom:printFrom,saveNow:saveNow,recalc:recalc,
+ repAdd:repAdd,repSet:repSet,repQty:repQty,repAppr:repAppr,repDel:repDel,
+ labAdd:labAdd,labSet:labSet,labAppr:labAppr,labDel:labDel,labRate:labRate,labDraftCalc:labDraftCalc,
+ partAdd:partAdd,partSet:partSet,partAppr:partAppr,partDel:partDel,partLookup:partLookup,partNameInput:partNameInput,
+ partDraftLookup:partDraftLookup,partDraftQtyChanged:partDraftQtyChanged,partDraftBuyChanged:partDraftBuyChanged,partDraftCalc:partDraftCalc,
+ printDoc:printDoc,printFrom:printFrom,saveNow:saveNow,recalc:recalc,
  adminPanel:adminPanel,adminClose:adminClose,adminLogin:adminLogin,adminSetup:adminSetup,adminChangeView:admChangeView,adminChange:adminChange,lockAdmin:lockAdmin};
 
 customers();badge();
@@ -11748,7 +11870,7 @@ var CUST=[
  {n:'บริษัท สินทรัพย์พยัคฆ์ จำกัด',a:'145 หมู่ 9 ถนนพหลโยธิน ต.สันทราย อ.เมืองเชียงราย จ.เชียงราย 57000',p:'061-2674000'},
  {n:'พยัคฆ์ค้าสากล บจก.',a:'141 หมู่ 25 ต.รอบเวียง อ.เมือง จ.เชียงราย 57000',p:'098-6169393'}
 ];
-var X=e,N=fm,D=dd;
+var X=e,N=function(v,d){return num(v).toLocaleString('th-TH',{maximumFractionDigits:d==null?2:d})},D=dd;
 var mode='list',curId='',q='',msgText='';
 
 function readQ(){try{var o=JSON.parse(localStorage.getItem(KEY)||'{}');if(!o||typeof o!=='object')o={};o.docs=o.docs||{};return o}catch(err){return {docs:{}}}}
@@ -11771,22 +11893,35 @@ function cur(){return norm(curId?getDoc(curId):null)}
 function customers(){var a=null;try{a=JSON.parse(localStorage.getItem(CKEY)||'null')}catch(err){}if(Array.isArray(a)&&a.length)return a;try{localStorage.setItem(CKEY,JSON.stringify(CUST))}catch(e2){}return CUST}
 function stockMap(){
  var m={};
- try{(rows||[]).forEach(function(r){if(!r||!r.it||r.it.g)return;m[r.it.c]={n:r.it.n,u:r.it.u||'',p:+r.it.p||0,st:+r.st||0}})}catch(err){}
+ try{(rows||[]).forEach(function(r){if(!r||!r.it||r.it.g)return;m[r.it.c]={n:r.it.n,u:r.it.u||'',p:num(r.it.p),st:num(r.st)}})}catch(err){}
  if(!Object.keys(m).length){
-  try{var SS=JSON.parse(localStorage.getItem('stk1')||'null');(SS&&SS.items||[]).forEach(function(it){if(it.g)return;m[it.c]={n:it.n,u:it.u||'',p:+it.p||0,st:+it.o||0}})}catch(e2){}
+  try{var SS=JSON.parse(localStorage.getItem('stk1')||'null');(SS&&SS.items||[]).forEach(function(it){if(it.g)return;m[it.c]={n:it.n,u:it.u||'',p:num(it.p),st:num(it.o)}})}catch(e2){}
  }
  return m;
 }
+function num(v){var n=Number(String(v==null?'0':v).replace(/,/g,'').trim());return Number.isFinite(n)?n:0}
+function amount(){var n=1;for(var i=0;i<arguments.length;i++)n*=num(arguments[i]);return Number.isFinite(n)?n:0}
+function priceInput(v){var n=num(v);return n===0?'':String(n)}
+function moneyText(v,suffix){var n=num(v);return n===0?'-':N(n)+(suffix||'')}
+function partQty(p){return p.buyQty===''||p.buyQty==null?num(p.qty):num(p.buyQty)}
+function partAmount(p){return num(p.price)}
+function laborAmount(l){return num(l.price)}
 function total(d){
  var L=0,P=0,R=0;
- (d.labor||[]).forEach(function(l){var t=(+l.hours||0)*(+l.qty||0)*(+l.price||0);if(l.appr==='0')R+=t;else L+=t});
- (d.parts||[]).forEach(function(p){var t=(+p.qty||0)*(+p.price||0);if(p.appr==='0')R+=t;else P+=t});
- return {labor:L,parts:P,rej:R,grand:L+P};
+ (d.labor||[]).forEach(function(l){var t=laborAmount(l);if(l.appr==='0')R=num(R+t);else L=num(L+t)});
+ (d.parts||[]).forEach(function(p){var t=partAmount(p);if(p.appr==='0')R=num(R+t);else P=num(P+t)});
+ return {labor:L,parts:P,rej:R,grand:num(L+P)};
 }
-function hours(d){var s=0;(d.labor||[]).forEach(function(l){s+=(+l.hours||0)*(+l.qty||0)});return s}
+function hours(d){var s=0;(d.labor||[]).forEach(function(l){s=num(s+amount(l.hours,l.qty))});return s}
+function recalc(){
+ var d=cur();if(!d)return;
+ var t=total(d),set=function(id,v){var el=document.getElementById(id);if(el)el.textContent=v};
+ set('spTotalLabor',N(t.labor)+' ฿');set('spTotalParts',N(t.parts)+' ฿');set('spTotalGrand',N(t.grand)+' ฿');set('spTotalRejected',N(t.rej)+' ฿');
+ (d.parts||[]).forEach(function(p,i){set('spPartRow'+i,moneyText(partAmount(p)))});
+}
 function shortCount(d,sm){
  sm=sm||stockMap();var n=0;
- (d.parts||[]).forEach(function(p){if(p.appr==='0'||!p.code)return;var s=sm[p.code];if(s&&s.st<(+p.qty||0))n++});
+ (d.parts||[]).forEach(function(p){if(p.appr==='0'||!p.code)return;var s=sm[p.code];if(s&&s.st<num(p.qty))n++});
  return n;
 }
 function pendingCount(){return allDocs().filter(function(d){return d.status!=='approved'}).length}
@@ -11848,9 +11983,8 @@ function approveAll(){
 }
 function part(i,f,v){
  var d=cur();if(!d||!d.parts[i])return;
- d.parts[i][f]=(f==='qty'||f==='buyQty'||f==='price')?(+v||0):v;
- if(f==='qty'){var sm=stockMap(),p=d.parts[i],s=sm[p.code];if(s)p.buyQty=Math.max(0,(+p.qty||0)-s.st)}
- writeDoc(d,true);draw();
+ d.parts[i][f]=f==='buyQty'?(v===''?'':num(v)):(f==='qty'||f==='price'?num(v):v);
+ writeDoc(d,true);recalc();
 }
 function pname(i,v){var d=cur();if(!d||!d.parts[i])return;d.parts[i].name=v;writeDoc(d,true)}
 function appr(i,v){var d=cur();if(!d||!d.parts[i])return;d.parts[i].appr=v;writeDoc(d,true);draw()}
@@ -11859,10 +11993,11 @@ function map(i,v){
  var d=cur();if(!d||!d.parts[i])return;
  var sm=stockMap(),code=String(v||'').trim().split(/\s+/)[0],s=sm[code];
  if(!s)return;
- var p=d.parts[i];
+ var p=d.parts[i],changed=p.code!==code;
  p.code=code;p.name=s.n;p.unit=s.u;
- if(!(+p.price>0))p.price=s.p;
- p.stock=s.st;p.buyQty=Math.max(0,(+p.qty||0)-s.st);
+ if(changed||!num(p.price))p.price=s.p;
+ p.stock=s.st;
+ if(changed||p.buyQty===''||p.buyQty==null)p.buyQty=Math.max(0,num(p.qty)-num(s.st));
  writeDoc(d,true);msgText='จับคู่ '+s.n+' · คงเหลือ '+N(s.st)+' · ราคา '+N(s.p)+' บาท';draw();
 }
 function addPart(){
@@ -11878,8 +12013,8 @@ function printDoc(){
  var d=cur();if(!d)return;
  var t=total(d),sm=stockMap(),isRepair=d.kind!=='parts';
  var rep=(d.reported||[]).map(function(r,i){return '<tr><td class="c">'+(i+1)+'</td><td>'+X(r.text)+'</td><td class="c">'+(r.appr==='1'?'✓':r.appr==='0'?'✗':'')+'</td></tr>'}).join('');
- var lab=(d.labor||[]).map(function(l,i){return '<tr><td class="c">'+(i+1)+'</td><td>'+X(l.desc)+'</td><td class="c">'+X(l.hours||'')+'</td><td class="c">'+X(l.qty||'')+'</td><td class="r">'+N(l.price)+'</td><td class="r">'+N((+l.hours||0)*(+l.qty||0)*(+l.price||0))+'</td><td class="c">'+(l.appr==='1'?'✓':l.appr==='0'?'✗':'')+'</td></tr>'}).join('');
- var pts=(d.parts||[]).map(function(p,i){var s=sm[p.code];var st=(s?s.st:(p.stock===''||p.stock==null?null:p.stock));return '<tr><td class="c">'+(i+1)+'</td><td class="mono">'+X(p.code||'')+'</td><td>'+X(p.name)+(p.unit?' <span class="mut">('+X(p.unit)+')</span>':'')+'</td><td class="c">'+N(p.qty)+'</td><td class="r">'+(st==null?'-':N(st))+'</td><td class="c">'+(p.buyQty===''||p.buyQty==null?'-':N(p.buyQty))+'</td><td class="r">'+N(p.price)+'</td><td class="r"><b>'+N((+p.qty||0)*(+p.price||0))+'</b></td><td class="c">'+(p.appr==='1'?'✓':p.appr==='0'?'✗':'')+'</td></tr>'}).join('');
+ var lab=(d.labor||[]).map(function(l,i){return '<tr><td class="c">'+(i+1)+'</td><td>'+X(l.desc)+'</td><td class="c">'+X(l.hours||'')+'</td><td class="c">'+X(l.qty||'')+'</td><td class="r">'+moneyText(l.price)+'</td><td class="r">'+moneyText(laborAmount(l))+'</td><td class="c">'+(l.appr==='1'?'✓':l.appr==='0'?'✗':'')+'</td></tr>'}).join('');
+ var pts=(d.parts||[]).map(function(p,i){var s=sm[p.code];var st=(s?s.st:(p.stock===''||p.stock==null?null:p.stock));return '<tr><td class="c">'+(i+1)+'</td><td class="mono">'+X(p.code||'')+'</td><td>'+X(p.name)+(p.unit?' <span class="mut">('+X(p.unit)+')</span>':'')+'</td><td class="c">'+N(p.qty)+'</td><td class="r">'+(st==null?'-':N(st))+'</td><td class="c">'+(p.buyQty===''||p.buyQty==null?'-':N(p.buyQty))+'</td><td class="r">'+moneyText(p.price)+'</td><td class="r"><b>'+moneyText(partAmount(p))+'</b></td><td class="c">'+(p.appr==='1'?'✓':p.appr==='0'?'✗':'')+'</td></tr>'}).join('');
  var css='@page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}body{font:12px "Sarabun",Tahoma,sans-serif;color:#111;margin:0;padding:0 2mm}'+
   '.co{font-weight:bold;font-size:15px}.addr{font-size:11px;color:#333;line-height:1.45}.ttl{text-align:right}.ttl b{font-size:16px;display:block}.ttl small{font-size:10.5px;color:#444}'+
   '.head{display:flex;justify-content:space-between;gap:14px;border-bottom:2px solid #b91c1c;padding-bottom:8px}'+
@@ -11928,7 +12063,7 @@ function view(){
 function listView(){
  var L=allDocs(),sm=stockMap(),cust=customers();
  var sum=0,pend=0,shortAll=0,fromG=0,fromS=0;
- L.forEach(function(d){sum+=total(norm(d)).grand;if(d.status!=='approved')pend++;shortAll+=shortCount(norm(d),sm);if(d.source==='store')fromS++;else fromG++});
+ L.forEach(function(d){sum=num(sum+total(norm(d)).grand);if(d.status!=='approved')pend++;shortAll+=shortCount(norm(d),sm);if(d.source==='store')fromS++;else fromG++});
  var list=L.filter(function(d){
   if(!q)return true;
   var s=(d.no+' '+(d.customer||{}).name+' '+(d.headPlate||'')+' '+(d.trailerPlate||'')).toLowerCase();
@@ -11975,18 +12110,18 @@ function editView(){
  var dl='<datalist id="spPartDl">'+Object.keys(sm).map(function(c){var s=sm[c];return '<option value="'+X(c)+' '+X(s.n)+'">คงเหลือ '+N(s.st)+' · '+N(s.p)+' บาท</option>'}).join('')+'</datalist>';
  var custOpts=cust.map(function(c){return '<option value="'+X(c.n)+'"'+(d.customer.name===c.n?' selected':'')+'>'+X(c.n)+'</option>'}).join('');
  var repRows=(d.reported||[]).map(function(r,i){return '<tr><td class="n">'+(i+1)+'</td><td>'+X(r.text)+'</td><td class="n">'+(r.appr==='1'?'✓':r.appr==='0'?'✗':'—')+'</td></tr>'}).join('');
- var labRows=(d.labor||[]).map(function(l,i){return '<tr><td class="n">'+(i+1)+'</td><td>'+X(l.desc)+'</td><td class="n">'+N(l.hours)+'</td><td class="n">'+N(l.qty)+'</td><td class="n">'+N(l.price)+'</td><td class="n"><b>'+N((+l.hours||0)*(+l.qty||0)*(+l.price||0))+'</b></td><td class="n">'+(l.appr==='1'?'✓':l.appr==='0'?'✗':'รอ')+'</td></tr>'}).join('');
+ var labRows=(d.labor||[]).map(function(l,i){return '<tr><td class="n">'+(i+1)+'</td><td>'+X(l.desc)+'</td><td class="n">'+N(l.hours)+'</td><td class="n">'+N(l.qty)+'</td><td class="n">'+moneyText(l.price)+'</td><td class="n"><b>'+moneyText(laborAmount(l))+'</b></td><td class="n">'+(l.appr==='1'?'✓':l.appr==='0'?'✗':'รอ')+'</td></tr>'}).join('');
  var ptRows=(d.parts||[]).map(function(p,i){
-  var s=sm[p.code],st=(s?s.st:(p.stock===''||p.stock==null?null:+p.stock)),lack=(st!=null&&st<(+p.qty||0));
+  var s=sm[p.code],st=(s?s.st:(p.stock===''||p.stock==null?null:num(p.stock))),lack=(st!=null&&st<num(p.qty));
   return '<tr>'+
    '<td class="n">'+(i+1)+'</td>'+
    '<td><input list="spPartDl" value="'+X(p.code||'')+'" onchange="SP.map('+i+',this.value)" placeholder="รหัส" style="width:104px;font-family:monospace;font-size:11px"></td>'+
    '<td><input value="'+X(p.name||'')+'" onchange="SP.pname('+i+',this.value)" style="width:100%;min-width:150px;font-size:12px"></td>'+
-   '<td><input type="number" step="any" min="0" value="'+X(p.qty)+'" onchange="SP.part('+i+',\'qty\',this.value)" style="width:60px;text-align:center"></td>'+
+   '<td><input type="number" step="any" min="0" value="'+X(p.qty)+'" oninput="SP.part('+i+',\'qty\',this.value)" onchange="SP.part('+i+',\'qty\',this.value)" onkeyup="SP.part('+i+',\'qty\',this.value)" style="width:60px;text-align:center"></td>'+
    '<td class="n" style="'+(lack?'color:#b91c1c;font-weight:800':'color:#475569')+'" title="'+(s?'คงเหลือจากระบบสโตร์':'ไม่พบในระบบสโตร์')+'">'+(st==null?'—':N(st))+'</td>'+
-   '<td><input type="number" step="any" min="0" value="'+(p.buyQty===''||p.buyQty==null?'':X(p.buyQty))+'" onchange="SP.part('+i+',\'buyQty\',this.value)" style="width:60px;text-align:center"></td>'+
-   '<td><input type="number" step="any" min="0" value="'+X(p.price)+'" onchange="SP.part('+i+',\'price\',this.value)" style="width:84px;text-align:right"></td>'+
-   '<td class="n"><b>'+N((+p.qty||0)*(+p.price||0))+'</b></td>'+
+   '<td><input type="number" step="any" min="0" value="'+(p.buyQty===''||p.buyQty==null?'':X(p.buyQty))+'" oninput="SP.part('+i+',\'buyQty\',this.value)" onchange="SP.part('+i+',\'buyQty\',this.value)" onkeyup="SP.part('+i+',\'buyQty\',this.value)" style="width:60px;text-align:center"></td>'+
+   '<td><input type="number" step="any" min="0" value="'+priceInput(p.price)+'" oninput="SP.part('+i+',\'price\',this.value)" onchange="SP.part('+i+',\'price\',this.value)" onkeyup="SP.part('+i+',\'price\',this.value)" style="width:84px;text-align:right"></td>'+
+   '<td class="n"><b id="spPartRow'+i+'">'+moneyText(partAmount(p))+'</b></td>'+
    '<td class="n"><select onchange="SP.appr('+i+',this.value)"><option value=""'+(p.appr===''?' selected':'')+'>รอ</option><option value="1"'+(p.appr==='1'?' selected':'')+'>อนุมัติ</option><option value="0"'+(p.appr==='0'?' selected':'')+'>ไม่อนุมัติ</option></select></td>'+
    '<td class="n"><button class="b g" onclick="SP.delPart('+i+')" style="color:#b91c1c">×</button></td>'+
   '</tr>'}).join('');
@@ -12025,11 +12160,11 @@ function editView(){
     '</div>'+
    '</div>'+
    '<div style="border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;font-size:12px;background:#f8fafc">'+
-    (isRepair?'<div style="display:flex;justify-content:space-between;padding:1px 0"><span>รวมค่าแรง</span><b>'+N(t.labor)+' ฿</b></div>':'')+
-    '<div style="display:flex;justify-content:space-between;padding:1px 0"><span>รวมค่าอะไหล่</span><b>'+N(t.parts)+' ฿</b></div>'+
+    (isRepair?'<div style="display:flex;justify-content:space-between;padding:1px 0"><span>รวมค่าแรง</span><b id="spTotalLabor">'+N(t.labor)+' ฿</b></div>':'')+
+    '<div style="display:flex;justify-content:space-between;padding:1px 0"><span>รวมค่าอะไหล่</span><b id="spTotalParts">'+N(t.parts)+' ฿</b></div>'+
     (isRepair?'<div style="display:flex;justify-content:space-between;padding:1px 0;color:#64748b;font-size:10.5px"><span>ชั่วโมงมาตรฐานรวม</span><span>'+N(hours(d))+' ชม.</span></div>':'')+
-    '<div style="display:flex;justify-content:space-between;padding:4px 0;margin-top:3px;border-top:1px solid #cbd5e1;font-size:14px"><b>รวมสุทธิ</b><b style="color:#15803d">'+N(t.grand)+' ฿</b></div>'+
-    (t.rej?'<div style="display:flex;justify-content:space-between;color:#b91c1c;font-size:10.5px"><span>ไม่อนุมัติ</span><span>'+N(t.rej)+' ฿</span></div>':'')+
+    '<div style="display:flex;justify-content:space-between;padding:4px 0;margin-top:3px;border-top:1px solid #cbd5e1;font-size:14px"><b>รวมสุทธิ</b><b id="spTotalGrand" style="color:#15803d">'+N(t.grand)+' ฿</b></div>'+
+    (t.rej?'<div style="display:flex;justify-content:space-between;color:#b91c1c;font-size:10.5px"><span>ไม่อนุมัติ</span><span id="spTotalRejected">'+N(t.rej)+' ฿</span></div>':'')+
     '<div style="margin-top:6px;font-size:10.5px;color:#94a3b8">ราคาอ้างอิงจากระบบสโตร์ (ทุน) — แก้ไขได้ก่อนพิมพ์/ส่งลูกค้า</div>'+
    '</div>'+
   '</div>'+
@@ -12266,400 +12401,6 @@ window.addEventListener('storage',function(e){
   },1500);
 })();
 </script>
-<!-- ===== FLEETLINK CONNECTOR (เพิ่มใหม่) ===== -->
-<style>
-#flModal{position:fixed;inset:0;display:none;place-items:center;background:#0b1d2e66;z-index:26;padding:16px}
-#flModal.on{display:grid}
-#flModal .mbox{width:min(520px,100%);max-height:92vh;overflow:auto}
-#flModal .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-#flModal select,#flModal input[type=number]{height:38px;border:1px solid var(--line);border-radius:10px;padding:0 9px;font:inherit;font-size:13px;background:#fbfdff;color:var(--ink)}
-#flModal details{border:1px solid var(--line);border-radius:10px;padding:8px 11px;margin-bottom:10px;background:#f7fafc}
-#flModal summary{cursor:pointer;font-size:12.5px;font-weight:700;color:var(--navy)}
-#flModal details .row2{margin-top:10px}
-#flModal .sub{font-size:11px;font-weight:500;color:var(--mut)}
-#flRes{font-size:12px;line-height:1.6;color:var(--ink);background:#f2fbf5;border:1px solid #bfe3c9;border-radius:10px;padding:9px 11px;margin:0 0 12px;white-space:pre-wrap;word-break:break-word;display:none}
-#flRes.err{background:#fff5f6;border-color:#f5c2c7}
-#flModal .mact{flex-wrap:wrap}
-#flModal .mact .ghost.fl{border-color:#9db8d2;color:var(--navy)}
-.flbadge{display:inline-block;margin-top:4px;font-size:11px;font-weight:700;color:#166534;background:#dff3e6;border-radius:6px;padding:2px 8px}
-</style>
-
-<div id="flModal">
-  <div class="mbox">
-    <h3>🛰️ เชื่อมต่อ Fleetlink</h3>
-    <label>URL ของ API Fleetlink
-      <input type="text" id="flUrl" placeholder="https://.../vehicles" autocomplete="off">
-    </label>
-    <div class="row2">
-      <label>วิธีส่งคีย์
-        <select id="flAuth">
-          <option value="bearer">Bearer Token</option>
-          <option value="header">Header ชื่อเอง</option>
-          <option value="query">พารามิเตอร์ใน URL</option>
-          <option value="basic">Basic (user:pass)</option>
-          <option value="none">ไม่ใช้คีย์</option>
-        </select>
-      </label>
-      <label>ชื่อ Header / พารามิเตอร์
-        <input type="text" id="flAuthName" placeholder="X-API-Key / api_key" autocomplete="off">
-      </label>
-    </div>
-    <label>คีย์ / Token
-      <input type="text" id="flToken" placeholder="วางคีย์ที่ได้จาก Fleetlink" autocomplete="off">
-    </label>
-    <div class="row2">
-      <label>ดึงข้อมูลทุก (นาที) <span class="sub">0 = ดึงเอง</span>
-        <input type="number" id="flEvery" min="0" max="1440" value="10">
-      </label>
-      <label>หน่วยเลขไมล์จาก Fleetlink
-        <select id="flUnit">
-          <option value="km">กิโลเมตร</option>
-          <option value="m">เมตร (÷1000)</option>
-          <option value="mi">ไมล์ (×1.609)</option>
-        </select>
-      </label>
-    </div>
-    <label class="chk"><input type="checkbox" id="flAuto"> เติมเลขไมล์ในใบตรวจอัตโนมัติเมื่อเลือกทะเบียน</label>
-    <details>
-      <summary>ชื่อฟิลด์ (ปล่อยว่าง = ตรวจหาอัตโนมัติ)</summary>
-      <div class="row2">
-        <label>ทะเบียน<input type="text" id="flMPlate" placeholder="plate"></label>
-        <label>เลขไมล์<input type="text" id="flMOdo" placeholder="odometer"></label>
-        <label>ละติจูด<input type="text" id="flMLat" placeholder="lat"></label>
-        <label>ลองจิจูด<input type="text" id="flMLng" placeholder="lng"></label>
-        <label>ชั่วโมงเครื่อง<input type="text" id="flMHrs" placeholder="engineHours"></label>
-        <label>เวลาอัปเดต<input type="text" id="flMTime" placeholder="timestamp"></label>
-      </div>
-    </details>
-    <p class="hint">รองรับ JSON / XML (เช่น AEMP 2.0) · ถ้าเบราว์เซอร์ติด CORS ให้ใส่ URL ผ่าน proxy ของบริษัท · ยังไม่มี API ใช้ปุ่ม “นำเข้าไฟล์” (CSV / JSON / XML) แทนได้ · คีย์เก็บในเครื่องนี้เท่านั้น</p>
-    <div id="flRes"></div>
-    <div class="mact">
-      <button class="ghost" onclick="FL.close()">ปิด</button>
-      <button class="ghost fl" onclick="document.getElementById('flFile').click()">📂 นำเข้าไฟล์</button>
-      <button class="ghost fl" onclick="FL.test()">ทดสอบ</button>
-      <button class="primary" onclick="FL.save()">บันทึกและดึงข้อมูล</button>
-    </div>
-    <input type="file" id="flFile" accept=".csv,.json,.xml,.txt" class="hidden">
-  </div>
-</div>
-
-<script>
-(function(){
-'use strict';
-var CK='pgs_fleetlink_v1',DK='pgs_fleetlink_data_v1';
-var DEF={url:'',auth:'bearer',authName:'',token:'',every:10,unit:'km',auto:true,map:{}};
-var timer=null,hooked=new WeakSet();
-function $(id){return document.getElementById(id)}
-function rd(k,f){try{var v=localStorage.getItem(k);return v?JSON.parse(v):f}catch(e){return f}}
-function wr(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
-function cfg(){var c=Object.assign({},DEF,rd(CK,{})||{});c.map=c.map||{};return c}
-function tst(m){if(typeof toast==='function')toast(m)}
-
-/* ---------- ทะเบียน: ทำให้เทียบกันได้ ---------- */
-function pkey(p){return String(p||'').toLowerCase().replace(/[\s\-_.\/]+/g,'')}
-function dkey(p){return String(p||'').replace(/[^0-9]/g,'')}
-
-/* ---------- แปลงข้อมูลที่ได้เป็นรายการ ---------- */
-function getPath(o,path){
-  if(!path)return undefined;
-  var cur=o,parts=String(path).split('.');
-  for(var i=0;i<parts.length;i++){if(cur==null)return undefined;cur=cur[parts[i]]}
-  return cur;
-}
-function flat(o,out,pre){
-  out=out||{};pre=pre||'';
-  if(o==null||typeof o!=='object'){out[pre]=o;return out}
-  Object.keys(o).forEach(function(k){
-    var v=o[k],p=pre?pre+'.'+k:k;
-    if(Array.isArray(v)){if(v.length&&typeof v[0]!=='object')out[p]=v[0];else if(v.length)flat(v[0],out,p)}
-    else if(v&&typeof v==='object')flat(v,out,p);
-    else out[p]=v;
-  });
-  return out;
-}
-function findArray(o,depth){
-  if(Array.isArray(o))return o;
-  if(!o||typeof o!=='object'||depth>4)return null;
-  var best=null,ks=Object.keys(o);
-  for(var i=0;i<ks.length;i++){
-    var r=findArray(o[ks[i]],(depth||0)+1);
-    if(r&&(!best||r.length>best.length))best=r;
-  }
-  return best;
-}
-function xmlToObj(node){
-  var kids=[].filter.call(node.childNodes,function(n){return n.nodeType===1});
-  if(!kids.length)return node.textContent.trim();
-  var o={};
-  kids.forEach(function(k){
-    var n=k.localName,v=xmlToObj(k);
-    if(o[n]===undefined)o[n]=v;else{if(!Array.isArray(o[n]))o[n]=[o[n]];o[n].push(v)}
-  });
-  [].forEach.call(node.attributes||[],function(a){if(o[a.name]===undefined)o[a.name]=a.value});
-  return o;
-}
-function parseXml(text){
-  var doc=new DOMParser().parseFromString(text,'application/xml');
-  if(doc.getElementsByTagName('parsererror').length)throw new Error('อ่านไฟล์ XML ไม่ได้');
-  var counts={};
-  [].forEach.call(doc.getElementsByTagName('*'),function(e){
-    if([].some.call(e.childNodes,function(n){return n.nodeType===1}))counts[e.localName]=(counts[e.localName]||0)+1;
-  });
-  var tag=Object.keys(counts).sort(function(a,b){return counts[b]-counts[a]})[0];
-  if(!tag)throw new Error('ไม่พบข้อมูลใน XML');
-  return [].map.call(doc.getElementsByTagName('*'),function(e){return e}).filter(function(e){return e.localName===tag}).map(xmlToObj);
-}
-function parseCsv(text){
-  var rows=[],r=[],c='',q=false,i,ch;
-  text=text.replace(/^\uFEFF/,'');
-  for(i=0;i<text.length;i++){
-    ch=text[i];
-    if(q){if(ch==='"'){if(text[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}
-    else if(ch==='"')q=true;
-    else if(ch===','||ch==='\t'||ch===';'){r.push(c);c=''}
-    else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&text[i+1]==='\n')i++;r.push(c);c='';if(r.some(function(x){return x!==''}))rows.push(r);r=[]}
-    else c+=ch;
-  }
-  r.push(c);if(r.some(function(x){return x!==''}))rows.push(r);
-  if(rows.length<2)throw new Error('CSV ไม่มีข้อมูล');
-  var h=rows[0].map(function(x){return x.trim()});
-  return rows.slice(1).map(function(row){var o={};h.forEach(function(k,j){o[k]=row[j]});return o});
-}
-function parseAny(text){
-  var t=String(text||'').trim();
-  if(!t)throw new Error('ไม่ได้รับข้อมูล');
-  if(t[0]==='<')return parseXml(t);
-  if(t[0]==='{'||t[0]==='['){
-    var j=JSON.parse(t),a=findArray(j,0);
-    if(!a)a=[j];
-    return a;
-  }
-  return parseCsv(t);
-}
-
-/* ---------- จับคู่ฟิลด์ ---------- */
-var CAND={
-  plate:['plate','licenseplate','license_plate','license','registration','regno','vehiclename','vehicle_name','vehicle','name','assetname','ทะเบียน','ทะเบียนรถ'],
-  odo:['odometer','mileage','odo','totaldistance','total_distance','cumulativeodometer','distance','เลขไมล์','ไมล์','ระยะทางสะสม'],
-  lat:['latitude','lat'],
-  lng:['longitude','lng','lon','long'],
-  hrs:['enginehours','engine_hours','runninghours','cumulativeoperatinghours','hours','hourmeter','ชั่วโมงเครื่อง'],
-  time:['datetime','timestamp','time','updatedat','lastupdate','lastreport','datetimeutc','เวลา']
-};
-function pick(rec,kind,userKey){
-  if(userKey){
-    var v=getPath(rec,userKey);if(v!==undefined&&v!=='')return v;
-    var fl=flat(rec);
-    if(fl[userKey]!==undefined&&fl[userKey]!=='')return fl[userKey];
-  }
-  var f=flat(rec),keys=Object.keys(f),best;
-  var list=CAND[kind];
-  for(var i=0;i<list.length;i++){
-    for(var j=0;j<keys.length;j++){
-      var last=keys[j].split('.').pop().toLowerCase();
-      if(last===list[i]&&f[keys[j]]!==''&&f[keys[j]]!=null){return f[keys[j]]}
-    }
-  }
-  return best;
-}
-function num(v){if(v==null||v==='')return null;var n=parseFloat(String(v).replace(/,/g,''));return isFinite(n)?n:null}
-function toKm(n,unit){if(n==null)return null;if(unit==='m')n=n/1000;else if(unit==='mi')n=n*1.609344;return Math.round(n*10)/10}
-
-function normalize(list,c){
-  var m=c.map||{},out={},cnt=0;
-  list.forEach(function(rec){
-    var plate=pick(rec,'plate',m.plate);
-    if(!plate)return;
-    var odo=toKm(num(pick(rec,'odo',m.odo)),c.unit);
-    var ts=pick(rec,'time',m.time);
-    out[pkey(plate)]={
-      plate:String(plate).trim(),
-      odo:odo,
-      lat:num(pick(rec,'lat',m.lat)),
-      lng:num(pick(rec,'lng',m.lng)),
-      hrs:num(pick(rec,'hrs',m.hrs)),
-      time:ts?String(ts):'',
-      got:Date.now()
-    };
-    cnt++;
-  });
-  if(!cnt)throw new Error('ไม่พบฟิลด์ทะเบียนในข้อมูล — ตั้งชื่อฟิลด์ในส่วน “ชื่อฟิลด์”');
-  return out;
-}
-function store(vehicles,source){
-  wr(DK,{updatedAt:Date.now(),source:source||'api',vehicles:vehicles});
-  hookGarage();
-}
-
-/* ---------- ดึงข้อมูลจาก API ---------- */
-function buildReq(c){
-  var url=c.url.trim(),h={'Accept':'application/json, application/xml, text/csv, */*'};
-  if(c.auth==='bearer'&&c.token)h['Authorization']='Bearer '+c.token;
-  else if(c.auth==='header'&&c.token)h[c.authName||'X-API-Key']=c.token;
-  else if(c.auth==='basic'&&c.token)h['Authorization']='Basic '+btoa(unescape(encodeURIComponent(c.token)));
-  else if(c.auth==='query'&&c.token){url+=(url.indexOf('?')<0?'?':'&')+encodeURIComponent(c.authName||'api_key')+'='+encodeURIComponent(c.token)}
-  return {url:url,init:{method:'GET',headers:h,cache:'no-store'}};
-}
-function pull(c){
-  c=c||cfg();
-  if(!c.url)return Promise.reject(new Error('ยังไม่ได้ใส่ URL ของ Fleetlink'));
-  var r=buildReq(c);
-  return fetch(r.url,r.init).then(function(res){
-    if(!res.ok)throw new Error('Fleetlink ตอบกลับ HTTP '+res.status);
-    return res.text();
-  }).then(function(t){
-    var v=normalize(parseAny(t),c);
-    return v;
-  }).catch(function(e){
-    if(e&&e.name==='TypeError')throw new Error('เชื่อมต่อไม่ได้ (เครือข่าย/CORS) — ลองใช้ URL ผ่าน proxy หรือนำเข้าไฟล์แทน');
-    throw e;
-  });
-}
-function refresh(silent){
-  return pull().then(function(v){
-    store(v,'api');
-    if(!silent)tst('🛰️ Fleetlink: ได้ข้อมูล '+Object.keys(v).length+' คัน');
-    renderChip();
-    return v;
-  }).catch(function(e){
-    if(!silent)tst('🛰️ '+e.message);
-    renderChip(e.message);
-    throw e;
-  });
-}
-function schedule(){
-  clearInterval(timer);timer=null;
-  var c=cfg();
-  if(c.url&&+c.every>0)timer=setInterval(function(){refresh(true).catch(function(){})},Math.max(1,+c.every)*60000);
-}
-
-/* ---------- ค้นหารถ ---------- */
-function find(plate){
-  var d=rd(DK,null);if(!d||!d.vehicles)return null;
-  var k=pkey(plate);if(!k)return null;
-  if(d.vehicles[k])return d.vehicles[k];
-  var dk=dkey(plate),hit=null,n=0;
-  if(dk.length>=4){
-    Object.keys(d.vehicles).forEach(function(x){if(dkey(x)===dk){hit=d.vehicles[x];n++}});
-    if(n===1)return hit;
-  }
-  return null;
-}
-
-/* ---------- เติมในฟอร์มอู่ ---------- */
-function fmtT(ts){return new Date(ts).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}
-function fillFor(doc,plateEl){
-  var odo=doc.getElementById('odometer');
-  if(!odo||!cfg().auto)return;
-  var rec=find(plateEl.value);
-  var old=doc.getElementById('flBadge');if(old)old.remove();
-  if(!rec||rec.odo==null)return;
-  var mine=odo.dataset.fl==='1';
-  if(odo.value===''||mine){
-    odo.value=Math.round(rec.odo);
-    odo.dataset.fl='1';
-    odo.dispatchEvent(new Event('input',{bubbles:true}));
-    odo.dispatchEvent(new Event('change',{bubbles:true}));
-  }
-  var b=doc.createElement('span');b.id='flBadge';b.className='flbadge';
-  b.style.cssText='display:inline-block;margin-top:4px;font-size:11px;font-weight:700;color:#166534;background:#dff3e6;border-radius:6px;padding:2px 8px';
-  b.textContent='🛰️ Fleetlink '+Math.round(rec.odo).toLocaleString('th-TH')+' กม.'+(rec.time?' · '+rec.time.slice(0,16).replace('T',' '):'')+(odo.dataset.fl==='1'?'':' (ไม่ทับค่าที่กรอกไว้)');
-  (odo.parentNode&&odo.parentNode.parentNode||odo.parentNode).appendChild(b);
-}
-function hookGarage(){
-  try{
-    var f=document.getElementById('frgarage');
-    var w=f&&f.contentWindow,doc=w&&w.document;
-    if(!doc)return;
-    try{w.PGSFleet=window.PGSFleet}catch(e){}
-    var pl=doc.getElementById('tractorPlate'),odo=doc.getElementById('odometer');
-    if(!pl||!odo)return;
-    if(!hooked.has(pl)){
-      hooked.add(pl);
-      ['change','blur','input'].forEach(function(ev){pl.addEventListener(ev,function(){fillFor(doc,pl)})});
-      odo.addEventListener('input',function(e){if(e.isTrusted)odo.dataset.fl='0'});
-    }
-    if(pl.value)fillFor(doc,pl);
-  }catch(e){}
-}
-
-/* ---------- UI ---------- */
-function renderChip(err){
-  var d=rd(DK,null),c=cfg(),el=$('flChipTxt'),dot=$('flDot');
-  if(!el)return;
-  if(err){el.textContent='Fleetlink ผิดพลาด';dot.className='dot';return}
-  if(d&&d.updatedAt){el.textContent='Fleetlink '+fmtT(d.updatedAt);dot.className='dot ok'}
-  else{el.textContent=c.url?'Fleetlink ยังไม่ดึง':'Fleetlink';dot.className='dot'}
-}
-function showRes(msg,err){var r=$('flRes');r.style.display='block';r.className=err?'err':'';r.id='flRes';r.textContent=msg}
-function sample(v){
-  var ks=Object.keys(v);
-  return 'พบ '+ks.length+' คัน\n'+ks.slice(0,4).map(function(k){var x=v[k];return '• '+x.plate+' · ไมล์ '+(x.odo==null?'-':Math.round(x.odo).toLocaleString('th-TH'))+(x.lat!=null?' · GPS '+x.lat+','+x.lng:'')}).join('\n');
-}
-function readForm(){
-  return {
-    url:$('flUrl').value.trim(),auth:$('flAuth').value,authName:$('flAuthName').value.trim(),
-    token:$('flToken').value.trim(),every:+$('flEvery').value||0,unit:$('flUnit').value,auto:$('flAuto').checked,
-    map:{plate:$('flMPlate').value.trim(),odo:$('flMOdo').value.trim(),lat:$('flMLat').value.trim(),lng:$('flMLng').value.trim(),hrs:$('flMHrs').value.trim(),time:$('flMTime').value.trim()}
-  };
-}
-var FL={
-  open:function(){
-    var c=cfg();
-    $('flUrl').value=c.url;$('flAuth').value=c.auth;$('flAuthName').value=c.authName;$('flToken').value=c.token;
-    $('flEvery').value=c.every;$('flUnit').value=c.unit;$('flAuto').checked=c.auto!==false;
-    var m=c.map||{};
-    $('flMPlate').value=m.plate||'';$('flMOdo').value=m.odo||'';$('flMLat').value=m.lat||'';
-    $('flMLng').value=m.lng||'';$('flMHrs').value=m.hrs||'';$('flMTime').value=m.time||'';
-    $('flRes').style.display='none';
-    $('flModal').classList.add('on');
-  },
-  close:function(){$('flModal').classList.remove('on')},
-  test:function(){
-    var c=readForm();showRes('กำลังทดสอบ…');
-    pull(c).then(function(v){showRes('✅ เชื่อมต่อสำเร็จ · '+sample(v))}).catch(function(e){showRes('❌ '+e.message,true)});
-  },
-  save:function(){
-    var c=readForm();wr(CK,c);schedule();
-    if(!c.url){showRes('บันทึกการตั้งค่าแล้ว (ยังไม่มี URL — ใช้นำเข้าไฟล์ได้)');renderChip();return}
-    showRes('บันทึกแล้ว กำลังดึงข้อมูล…');
-    refresh(true).then(function(v){showRes('✅ บันทึกแล้ว · '+sample(v))}).catch(function(e){showRes('บันทึกแล้ว แต่ดึงข้อมูลไม่ได้: '+e.message,true)});
-  },
-  importText:function(text,name){
-    try{
-      var c=readForm(),v=normalize(parseAny(text),c);
-      store(v,'file');renderChip();
-      showRes('✅ นำเข้า '+(name||'ไฟล์')+' แล้ว · '+sample(v));
-    }catch(e){showRes('❌ '+e.message,true)}
-  }
-};
-window.FL=FL;
-
-/* ---------- ปุ่มบนหัวโปรแกรม ---------- */
-(function init(){
-  var tools=document.querySelector('header .tools');
-  if(tools){
-    var b=document.createElement('button');
-    b.className='chip';b.id='flChip';b.title='เชื่อมต่อ Fleetlink';
-    b.innerHTML='<span class="dot" id="flDot"></span><span id="flChipTxt">Fleetlink</span>';
-    b.onclick=FL.open;
-    tools.insertBefore(b,tools.firstChild);
-  }
-  $('flFile').addEventListener('change',function(e){
-    var f=e.target.files&&e.target.files[0];if(!f)return;
-    var r=new FileReader();
-    r.onload=function(){FL.importText(String(r.result||''),f.name);$('flFile').value=''};
-    r.readAsText(f,'utf-8');
-  });
-  document.addEventListener('keydown',function(e){if(e.key==='Escape')FL.close()});
-  window.PGSFleet={find:find,refresh:refresh,all:function(){return rd(DK,{})},config:cfg};
-  renderChip();schedule();
-  if(cfg().url)refresh(true).catch(function(){});
-  setInterval(hookGarage,1500);
-})();
-})();
-</script>
-<!-- ===== END FLEETLINK ===== -->
 
 <!-- ===== PRESENCE: ใครออนไลน์ (เพิ่มใหม่) ===== -->
 <style>
@@ -12667,150 +12408,79 @@ window.FL=FL;
 #pcPanel.on{display:block}
 #pcPanel .ph{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:linear-gradient(120deg,#1f4e78,#123a5a);color:#fff;font-size:13.5px;font-weight:700}
 #pcPanel .ph button{border:0;background:#ffffff1c;color:#fff;width:26px;height:26px;border-radius:7px;cursor:pointer}
-#pcPanel .me{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;background:#f6f9fc}
-#pcPanel .me input{flex:1;min-width:0;height:34px;border:1px solid var(--line);border-radius:9px;padding:0 10px;font:inherit;font-size:13px}
-#pcPanel .me button{height:34px;padding:0 12px;border:0;border-radius:9px;background:var(--navy);color:#fff;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 #pcList{max-height:50vh;overflow:auto;padding:6px 8px}
 #pcList .u{display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:9px;font-size:13px}
 #pcList .u:hover{background:#f1f6fb}
 #pcList .u .dot{flex:none}
-#pcList .u b{font-weight:600}
-#pcList .u small{margin-left:auto;color:var(--mut);font-size:11px;white-space:nowrap}
-#pcList .u .tg{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;background:#e8f0f8;color:#1f4e78;white-space:nowrap}
-#pcList .u.self b::after{content:' (คุณ)';color:var(--mut);font-weight:500}
+#pcList .u .details{min-width:0;display:flex;flex-direction:column;gap:2px}
+#pcList .u b{font-weight:600;overflow-wrap:anywhere}
+#pcList .u small{color:var(--mut);font-size:11px}
 #pcFoot{padding:8px 14px 11px;font-size:11px;color:var(--mut);border-top:1px solid var(--line)}
+#onlineToastStack{position:fixed;right:18px;bottom:18px;z-index:110;display:flex;flex-direction:column;align-items:flex-end;gap:8px;max-width:min(360px,calc(100vw - 36px));pointer-events:none}
+.online-toast{padding:10px 14px;border-radius:11px;background:#12314d;color:#fff;font-size:12.5px;line-height:1.5;box-shadow:0 8px 24px #0004;animation:onlineToastIn .2s ease-out}
+@keyframes onlineToastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 </style>
 
 <div id="pcPanel" aria-hidden="true">
-  <div class="ph"><span>👥 ผู้ใช้ที่ออนไลน์</span><button onclick="PC.toggle(false)" aria-label="ปิด">✕</button></div>
-  <div class="me"><input type="text" id="pcName" maxlength="24" placeholder="ชื่อของคุณ" autocomplete="off"><button onclick="PC.saveName()">บันทึกชื่อ</button></div>
+  <div class="ph"><span>👥 ผู้ใช้ที่ออนไลน์</span><button type="button" onclick="PC.toggle(false)" aria-label="ปิด">✕</button></div>
   <div id="pcList"></div>
-  <div id="pcFoot"></div>
+  <div id="pcFoot">แสดงเซสชันที่เข้าสู่ระบบอยู่ในขณะนี้</div>
 </div>
+<div id="onlineToastStack" aria-live="polite" aria-atomic="false"></div>
 
 <script>
 (function(){
 'use strict';
-var NK='pgs_presence_name_v1',IK='pgs_presence_id_v1',CFGK='pgs_bridge_cfg_v1',LK='pgs_presence_local_v1';
-var BEAT=45000,ALIVE=110000,es=null,esRoom='',peers={},firstSeen=false,bc=null,booted=Date.now();
 function $(id){return document.getElementById(id)}
-function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
-function cfg(){var c={room:'GARAGE-18W',relay:true};try{Object.assign(c,JSON.parse(localStorage.getItem(CFGK)||'{}'))}catch(e){}return c}
-function room(){return String(cfg().room||'GARAGE-18W').replace(/[^A-Za-z0-9_-]/g,'_').slice(0,40)||'GARAGE-18W'}
-function topic(){return 'https://ntfy.sh/smart_garage_18w_presence_'+room()}
-function myId(){
-  var id='';try{id=localStorage.getItem(IK)||''}catch(e){}
-  if(!id){id='u'+Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-3);try{localStorage.setItem(IK,id)}catch(e){}}
-  return id;
-}
-function myName(){
-  var n='';try{n=localStorage.getItem(NK)||''}catch(e){}
-  return n||('ผู้ใช้-'+myId().slice(1,5));
-}
-function curTab(){try{return (typeof cur!=='undefined'&&cur==='store')?'store':'garage'}catch(e){return 'garage'}}
-function tabTxt(t){return t==='store'?'📦 สโตร์':'🔧 อู่'}
-function ago(ts){
-  var s=Math.max(0,Math.round((Date.now()-ts)/1000));
-  if(s<20)return 'เมื่อสักครู่';
-  if(s<60)return s+' วิที่แล้ว';
-  return Math.round(s/60)+' นาทีที่แล้ว';
-}
-function payload(type){return {t:type||'hb',id:myId(),name:myName(),tab:curTab(),ts:Date.now(),room:room()}}
-
-/* ---------- ส่งสัญญาณ ---------- */
-function localPut(p){
-  try{localStorage.setItem(LK+'_'+p.id,JSON.stringify(p))}catch(e){}
-  try{bc&&bc.postMessage(p)}catch(e){}
-}
-function send(type){
-  var p=payload(type);
-  accept(p,true);
-  localPut(p);
-  if(cfg().relay!==false){
-    try{fetch(topic(),{method:'POST',body:JSON.stringify(p),keepalive:true}).catch(function(){})}catch(e){}
-  }
-}
-/* ---------- รับสัญญาณ ---------- */
-function accept(p,self){
-  if(!p||!p.id||p.room&&p.room!==room())return;
-  if(p.t==='bye'){delete peers[p.id];render();return}
-  var isNew=!peers[p.id];
-  var ts=+p.ts||Date.now();
-  if(Math.abs(Date.now()-ts)>6*3600000)ts=Date.now();
-  peers[p.id]={id:p.id,name:String(p.name||'ไม่ระบุชื่อ').slice(0,24),tab:p.tab==='store'?'store':'garage',ts:Math.min(ts,Date.now()),self:p.id===myId()};
-  if(isNew&&!self&&p.id!==myId()&&Date.now()-booted>6000&&Date.now()-ts<ALIVE&&typeof toast==='function')toast('👥 '+peers[p.id].name+' เข้าระบบ');
-  render();
-}
-function connect(){
-  var want=cfg().relay!==false?topic():'';
-  if(es&&esRoom===want)return;
-  if(es){try{es.close()}catch(e){}es=null}
-  esRoom=want;
-  if(!want||typeof EventSource==='undefined')return;
-  try{
-    es=new EventSource(want+'/sse?since=3m');
-    es.addEventListener('message',function(ev){
-      try{
-        var m=JSON.parse(ev.data);
-        var p=JSON.parse(m.message);
-        accept(p,false);
-      }catch(e){}
-    });
-    es.onerror=function(){/* EventSource เชื่อมใหม่เองอัตโนมัติ */};
-  }catch(e){es=null}
-}
-function scanLocal(){
-  try{
-    for(var i=0;i<localStorage.length;i++){
-      var k=localStorage.key(i);
-      if(k&&k.indexOf(LK+'_')===0){var p=JSON.parse(localStorage.getItem(k));if(p&&p.id!==myId())accept(p,false)}
-    }
-  }catch(e){}
-}
-
-/* ---------- แสดงผล ---------- */
-function alive(){
-  var now=Date.now(),out=[];
-  Object.keys(peers).forEach(function(k){
-    var x=peers[k];
-    if(now-x.ts<=ALIVE||x.self)out.push(x);
-    else if(now-x.ts>10*60000)delete peers[k];
-  });
-  out.sort(function(a,b){return (b.self?1:0)-(a.self?1:0)||a.name.localeCompare(b.name,'th')});
-  return out;
+var onlineUsers=[];
+function formatEnteredAt(value){
+  var timestamp=Number(value);
+  if(!Number.isFinite(timestamp)||timestamp<=0)return 'เวลาเข้าใช้งานไม่พร้อมใช้งาน';
+  return 'เข้าใช้งาน '+new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',dateStyle:'short',timeStyle:'short'}).format(new Date(timestamp));
 }
 function render(){
-  var list=alive(),chip=$('pcChipTxt');
-  if(chip)chip.textContent=list.length+' ออนไลน์';
-  if(!$('pcPanel')||!$('pcPanel').classList.contains('on'))return;
-  $('pcList').innerHTML=list.map(function(x){
-    return '<div class="u'+(x.self?' self':'')+'"><span class="dot ok"></span><b>'+esc(x.name)+'</b><span class="tg">'+tabTxt(x.tab)+'</span><small>'+(x.self?'ตอนนี้':ago(x.ts))+'</small></div>';
-  }).join('')||'<div class="empty" style="padding:18px;text-align:center;color:var(--mut);font-size:12.5px">ยังไม่มีผู้ใช้ออนไลน์</div>';
-  $('pcFoot').textContent=(cfg().relay!==false?'ข้ามเครื่องผ่าน Cloud relay':'เฉพาะเบราว์เซอร์เครื่องนี้ (Cloud relay ปิดอยู่)')+' · รหัสอู่ '+cfg().room+' · ถือว่าออนไลน์ถ้ามีสัญญาณใน 2 นาที';
+  var chip=$('pcChipTxt'),list=$('pcList');
+  if(chip)chip.textContent=onlineUsers.length+' ออนไลน์';
+  if(!list)return;
+  list.textContent='';
+  if(!onlineUsers.length){
+    var empty=document.createElement('div');
+    empty.className='empty';
+    empty.textContent='ยังไม่มีผู้ใช้ออนไลน์';
+    list.appendChild(empty);
+    return;
+  }
+  onlineUsers.forEach(function(user){
+    var row=document.createElement('div'),dot=document.createElement('span'),details=document.createElement('div'),email=document.createElement('b'),entered=document.createElement('small');
+    row.className='u';
+    dot.className='dot ok';
+    details.className='details';
+    email.textContent=user.email||'ไม่ทราบอีเมล';
+    entered.textContent=formatEnteredAt(user.enteredAt);
+    details.appendChild(email);
+    details.appendChild(entered);
+    row.appendChild(dot);
+    row.appendChild(details);
+    list.appendChild(row);
+  });
 }
+window.setOnlineUsers=function(users){onlineUsers=users;render()};
 var PC={
   toggle:function(force){
     var p=$('pcPanel'),on=typeof force==='boolean'?force:!p.classList.contains('on');
     p.classList.toggle('on',on);p.setAttribute('aria-hidden',on?'false':'true');
-    if(on){$('pcName').value=(function(){try{return localStorage.getItem(NK)||''}catch(e){return ''}})()||myName();render()}
-  },
-  saveName:function(){
-    var v=($('pcName').value||'').trim().slice(0,24);
-    if(!v){if(typeof toast==='function')toast('กรุณาใส่ชื่อ');return}
-    try{localStorage.setItem(NK,v)}catch(e){}
-    send('hb');
-    if(typeof toast==='function')toast('บันทึกชื่อแล้ว: '+v);
+    var chip=$('pcChip');if(chip)chip.setAttribute('aria-expanded',on?'true':'false');
+    if(on)render();
   }
 };
 window.PC=PC;
 
-/* ---------- เริ่มทำงาน ---------- */
 (function init(){
   var tools=document.querySelector('header .tools');
   if(tools){
     var b=document.createElement('button');
-    b.className='chip';b.id='pcChip';b.title='ดูว่าใครกำลังเข้าระบบ';
-    b.innerHTML='<span class="dot ok"></span><span id="pcChipTxt">1 ออนไลน์</span>';
+    b.type='button';b.className='chip';b.id='pcChip';b.title='ดูว่าใครกำลังเข้าระบบ';b.setAttribute('aria-controls','pcPanel');b.setAttribute('aria-expanded','false');
+    b.innerHTML='<span class="dot ok"></span><span id="pcChipTxt">0 ออนไลน์</span>';
     b.onclick=function(e){e.stopPropagation();PC.toggle()};
     tools.insertBefore(b,tools.firstChild);
   }
@@ -12818,22 +12488,6 @@ window.PC=PC;
     var p=$('pcPanel');if(p&&p.classList.contains('on')&&!p.contains(e.target)&&!(e.target.closest&&e.target.closest('#pcChip')))PC.toggle(false);
   });
   document.addEventListener('keydown',function(e){if(e.key==='Escape')PC.toggle(false)});
-  try{bc=new BroadcastChannel('pgs_presence_'+room());bc.onmessage=function(e){accept(e.data,false)}}catch(e){}
-  window.addEventListener('storage',function(e){
-    if(e.key&&e.key.indexOf(LK+'_')===0&&e.newValue){try{accept(JSON.parse(e.newValue),false)}catch(x){}}
-    if(e.key===CFGK){connect();send('hb')}
-  });
-  var lastTab=curTab();
-  send('hb');connect();scanLocal();
-  setInterval(function(){send('hb');connect();scanLocal()},BEAT);
-  setInterval(function(){var t=curTab();if(t!==lastTab){lastTab=t;send('hb')}render()},2000);
-  document.addEventListener('visibilitychange',function(){if(!document.hidden)send('hb')});
-  window.addEventListener('pagehide',function(){
-    var p=payload('bye');
-    try{localStorage.removeItem(LK+'_'+myId())}catch(e){}
-    try{bc&&bc.postMessage(p)}catch(e){}
-    if(cfg().relay!==false){try{fetch(topic(),{method:'POST',body:JSON.stringify(p),keepalive:true}).catch(function(){})}catch(e){}}
-  });
 })();
 })();
 </script>
@@ -13017,7 +12671,7 @@ window.addEventListener('storage',function(){if(pane.classList.contains('on'))re
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getDatabase, onValue, push, ref, remove, serverTimestamp, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, onDisconnect, onValue, push, ref, remove, serverTimestamp, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
@@ -13032,6 +12686,7 @@ const firebaseConfig = {
 };
 const LOG_PATH = "garage18w/access_logs";
 const ERP_PATH = "garage18w/erp_data";
+const ONLINE_USERS_PATH = "garage18w/online_users";
 const form = document.getElementById("authForm");
 const submitButton = document.getElementById("authSubmit");
 const errorBox = document.getElementById("authError");
@@ -13041,7 +12696,12 @@ const historyModal = document.getElementById("authHistory");
 let auth = null;
 let db = null;
 let stopHistoryListener = null;
+let stopOnlineListener = null;
+let stopOnlineConnectionListener = null;
 let statusTimer = null;
+let onlineSessionRef = null;
+let onlineSessionId = null;
+let onlineLastActiveTimer = null;
 let stopErpListener = null;
 let erpScanTimer = null;
 let erpSyncReady = false;
@@ -13074,6 +12734,125 @@ function reportErpSyncError(error) {
   status.textContent = "ซิงก์ ERP ไม่สำเร็จ";
   clearTimeout(statusTimer);
   statusTimer = setTimeout(function () { status.textContent = ""; }, 6000);
+}
+
+function reportOnlineError(error) {
+  console.error("Firebase online users sync failed", error);
+}
+
+function createOnlineSessionId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+}
+
+function showOnlineToast(email) {
+  const stack = document.getElementById("onlineToastStack");
+  if (!stack) return;
+  const item = document.createElement("div");
+  item.className = "online-toast";
+  item.textContent = (email || "ผู้ใช้") + " เข้ามาใช้งานระบบ";
+  stack.appendChild(item);
+  setTimeout(function () {
+    item.remove();
+  }, 5000);
+}
+
+function stopOnlineTracking() {
+  if (onlineLastActiveTimer) {
+    clearInterval(onlineLastActiveTimer);
+    onlineLastActiveTimer = null;
+  }
+  if (stopOnlineListener) {
+    stopOnlineListener();
+    stopOnlineListener = null;
+  }
+  if (stopOnlineConnectionListener) {
+    stopOnlineConnectionListener();
+    stopOnlineConnectionListener = null;
+  }
+  const oldSessionRef = onlineSessionRef;
+  onlineSessionRef = null;
+  onlineSessionId = null;
+  window.setOnlineUsers([]);
+  if (oldSessionRef) {
+    remove(oldSessionRef).catch(reportOnlineError);
+  }
+}
+
+function startOnlineTracking(user) {
+  stopOnlineTracking();
+  const sessionId = createOnlineSessionId();
+  const sessionRef = ref(db, ONLINE_USERS_PATH + "/" + sessionId);
+  onlineSessionRef = sessionRef;
+  onlineSessionId = sessionId;
+  const enteredAt = Date.now();
+  let connectionAttempt = 0;
+
+  let firstSnapshot = true;
+  let knownSessions = new Set();
+  stopOnlineListener = onValue(ref(db, ONLINE_USERS_PATH), function (snapshot) {
+    const users = [];
+    const nextSessions = new Set();
+    snapshot.forEach(function (child) {
+      const record = child.val();
+      if (!record || typeof record !== "object") return;
+      nextSessions.add(child.key);
+      users.push({
+        sessionId: child.key,
+        email: typeof record.email === "string" ? record.email : "",
+        enteredAt: record.enteredAt
+      });
+    });
+    if (!firstSnapshot) {
+      users.forEach(function (onlineUser) {
+        if (onlineUser.sessionId !== onlineSessionId && !knownSessions.has(onlineUser.sessionId)) {
+          showOnlineToast(onlineUser.email);
+        }
+      });
+    }
+    knownSessions = nextSessions;
+    firstSnapshot = false;
+    users.sort(function (a, b) {
+      return (Number(a.enteredAt) || 0) - (Number(b.enteredAt) || 0);
+    });
+    window.setOnlineUsers(users);
+  }, reportOnlineError);
+
+  stopOnlineConnectionListener = onValue(ref(db, ".info/connected"), function (snapshot) {
+    if (snapshot.val() !== true) {
+      connectionAttempt++;
+      if (onlineLastActiveTimer) {
+        clearInterval(onlineLastActiveTimer);
+        onlineLastActiveTimer = null;
+      }
+      return;
+    }
+
+    const attempt = ++connectionAttempt;
+    onDisconnect(sessionRef).remove().then(function () {
+      if (onlineSessionRef !== sessionRef || attempt !== connectionAttempt) return;
+      return set(sessionRef, {
+        email: user.email || "",
+        enteredAt: enteredAt,
+        lastActive: serverTimestamp()
+      });
+    }).then(function () {
+      if (onlineSessionRef !== sessionRef || attempt !== connectionAttempt) return;
+      if (onlineLastActiveTimer) clearInterval(onlineLastActiveTimer);
+      onlineLastActiveTimer = setInterval(function () {
+        if (onlineSessionRef !== sessionRef) return;
+        set(sessionRef, {
+          email: user.email || "",
+          enteredAt: enteredAt,
+          lastActive: serverTimestamp()
+        }).then(function () {
+          if (onlineSessionRef !== sessionRef) return remove(sessionRef);
+        }).catch(reportOnlineError);
+      }, 30000);
+    }).catch(reportOnlineError);
+  }, reportOnlineError);
 }
 
 async function writeErpValue(key, value) {
@@ -13397,8 +13176,10 @@ try {
       showUser(user);
       setAuthError("");
       document.body.classList.add("auth-ok");
+      startOnlineTracking(user);
       startErpSync();
     } else {
+      stopOnlineTracking();
       stopErpSync();
       window.hideAuthHistory();
       document.getElementById("authDisplayName").textContent = "";
