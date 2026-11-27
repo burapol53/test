@@ -106,6 +106,7 @@ main#stage{position:relative;flex:1;min-height:0;background:#fff}
 #authForm button:hover,#authHistoryClose:hover{background:#991b1b}
 #authHint{margin-top:14px!important;padding:10px 12px;border:1px solid #fecaca;border-radius:10px;background:#fff8f8;color:#64748b!important;font-size:12px!important;line-height:1.7}
 #authError{min-height:20px;margin-top:10px;color:#dc2626;font-size:12px}
+#authStatus{min-height:20px;margin-top:8px;color:#047857;font-size:12px}
 body:not(.auth-ok)>:not(#authScreen):not(script){visibility:hidden!important;pointer-events:none!important}
 body.auth-ok #authScreen{display:none}
 #authIdentity{display:flex;flex-direction:column;justify-content:center;min-width:105px;color:#fff;line-height:1.35}
@@ -187,7 +188,9 @@ body.auth-ok #authScreen{display:none}
       <label>อีเมล<input id="authEmail" name="email" type="email" autocomplete="email" required autofocus></label>
       <label>รหัสผ่าน<input id="authPassword" name="password" type="password" autocomplete="current-password" required></label>
       <button id="authSubmit" type="submit" disabled>กำลังเชื่อมต่อ Firebase...</button>
+      <button id="authResetPassword" type="button" disabled>ลืมรหัสผ่าน / ส่งลิงก์รีเซ็ต</button>
       <div id="authError" role="alert" aria-live="polite"></div>
+      <div id="authStatus" role="status" aria-live="polite"></div>
     </form>
     <p id="authHint">ใช้บัญชี Email/Password ที่เปิดใช้งานใน Firebase Authentication</p>
   </div>
@@ -12734,7 +12737,7 @@ window.addEventListener('storage',function(){if(pane.classList.contains('on'))re
 </script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, sendPasswordResetEmail, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getDatabase, onDisconnect, onValue, push, ref, remove, serverTimestamp, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -12753,7 +12756,9 @@ const ERP_PATH = "garage18w/erp_data";
 const ONLINE_USERS_PATH = "garage18w/online_users";
 const form = document.getElementById("authForm");
 const submitButton = document.getElementById("authSubmit");
+const resetPasswordButton = document.getElementById("authResetPassword");
 const errorBox = document.getElementById("authError");
+const statusBox = document.getElementById("authStatus");
 const emailInput = document.getElementById("authEmail");
 const passwordInput = document.getElementById("authPassword");
 const historyModal = document.getElementById("authHistory");
@@ -13076,6 +13081,10 @@ function setAuthError(message) {
   errorBox.textContent = message || "";
 }
 
+function setAuthStatus(message) {
+  statusBox.textContent = message || "";
+}
+
 window.verifyCurrentFirebasePassword = async function (password) {
   const user = auth && auth.currentUser;
   if (!user || !user.email) {
@@ -13194,10 +13203,49 @@ function authErrorMessage(error) {
   return messages[error.code] || "เข้าสู่ระบบไม่สำเร็จ: " + error.message;
 }
 
+function passwordResetErrorMessage(error) {
+  const messages = {
+    "auth/invalid-email": "รูปแบบอีเมลไม่ถูกต้อง",
+    "auth/missing-email": "กรุณากรอกอีเมลของบัญชีที่ต้องการรีเซ็ตรหัสผ่าน",
+    "auth/too-many-requests": "ส่งคำขอบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่",
+    "auth/network-request-failed": "เชื่อมต่อ Firebase ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต",
+    "auth/operation-not-allowed": "Firebase Authentication ยังไม่ได้เปิดใช้งานการรีเซ็ตรหัสผ่าน"
+  };
+  return messages[error.code] || "ส่งลิงก์รีเซ็ตรหัสผ่านไม่สำเร็จ: " + error.message;
+}
+
+resetPasswordButton.addEventListener("click", async function () {
+  setAuthError("");
+  setAuthStatus("");
+  const email = emailInput.value.trim();
+  if (!email) {
+    setAuthError("กรุณากรอกอีเมลของบัญชีที่ต้องการรีเซ็ตรหัสผ่านก่อน");
+    emailInput.focus();
+    return;
+  }
+  if (!auth) {
+    setAuthError("Firebase Authentication ยังไม่พร้อมใช้งาน");
+    return;
+  }
+  resetPasswordButton.disabled = true;
+  resetPasswordButton.textContent = "กำลังส่งลิงก์รีเซ็ต...";
+  try {
+    await sendPasswordResetEmail(auth, email);
+    setAuthStatus("ส่งลิงก์รีเซ็ตรหัสผ่านไปที่ " + email + " แล้ว กรุณาตรวจสอบอีเมล");
+  } catch (error) {
+    console.error("Firebase password reset email failed", error);
+    setAuthError(passwordResetErrorMessage(error));
+  } finally {
+    resetPasswordButton.disabled = false;
+    resetPasswordButton.textContent = "ลืมรหัสผ่าน / ส่งลิงก์รีเซ็ต";
+  }
+});
+
 form.addEventListener("submit", async function (event) {
   event.preventDefault();
   if (!auth) return;
   setAuthError("");
+  setAuthStatus("");
   submitButton.disabled = true;
   submitButton.textContent = "กำลังเข้าสู่ระบบ...";
   try {
@@ -13245,6 +13293,7 @@ try {
   db = getDatabase(app);
   submitButton.disabled = false;
   submitButton.textContent = "เข้าสู่ระบบ";
+  resetPasswordButton.disabled = false;
   onAuthStateChanged(auth, function (user) {
     if (user) {
       showUser(user);
@@ -13271,6 +13320,7 @@ try {
   setAuthError(error.message);
   submitButton.disabled = true;
   submitButton.textContent = "เชื่อมต่อ Firebase ไม่สำเร็จ";
+  resetPasswordButton.disabled = true;
 }
 </script>
 </body>
