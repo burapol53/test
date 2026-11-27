@@ -2050,8 +2050,7 @@ body.auth-ok #authScreen{display:none}
                         <span id="pgsCartCount" class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">0 รายการ</span>
                     </div>
                     <div id="pgsCart" class="mt-3 flex-1 min-h-[120px]"></div>
-                    <button type="button" id="pgsSubmitBtn" onclick="PGSParts.submitReq()" disabled class="mt-3 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-paper-plane mr-2"></i>ส่งใบเบิกไปสโตร์</button>
-                    <p class="text-[11px] text-slate-500 mt-2">สโตร์จะเห็นใบเบิกทันที และเมื่ออนุมัติ/สั่งของ อู่จะได้รับแจ้งเตือนกลับมาที่หน้านี้</p>
+                    <p class="text-[11px] text-slate-500 mt-2">รายการที่เพิ่มจะแสดงในคำขอเบิกและสามารถตรวจสอบได้ก่อนดำเนินการ</p>
                 </div>
             </div>
 
@@ -9958,7 +9957,7 @@ function aHash(p,s){
 }
 function admCfg(){try{var o=JSON.parse(localStorage.getItem(AKEY)||'null');return o&&o.h&&o.salt?o:null}catch(e){return null}}
 function admSess(){try{var o=JSON.parse(sessionStorage.getItem(ASESS)||'null');return o&&o.exp>Date.now()?o:null}catch(e){return null}}
-function isAdmin(){var s=admSess();return !!s&&!!st.id&&s.docId===st.id}
+function isAdmin(){var s=admSess(),cfg=admCfg();return !!s&&!!cfg&&s.pinAt===cfg.at&&!!st.id&&s.docId===st.id}
 function adminName(){var s=admSess();return (s&&s.name)||'แอดมิน'}
 function adminTouch(){var s=admSess();if(!s||s.docId!==st.id)return;s.exp=Date.now()+ADM_TTL;try{sessionStorage.setItem(ASESS,JSON.stringify(s))}catch(e){}}
 function clrAdmSess(){try{sessionStorage.removeItem(ASESS)}catch(e){}}
@@ -10011,6 +10010,7 @@ function admLoginView(msg){
  admShell(admHead('เฉพาะแอดมินเท่านั้น · ปลดล็อกเฉพาะใบ '+h(curNo())+' ใบนี้')+admErr(msg)+
   '<label style="display:block;margin-top:12px;font-size:11px;font-weight:700;color:#475569">รหัสแอดมิน<input id="qgAdmPin" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;letter-spacing:4px" onkeydown="if(event.key===\'Enter\')QG.adminLogin()"></label>'+
   '<div style="display:flex;gap:8px;margin-top:14px">'+admBtn('ยกเลิก','QG.adminClose()')+admBtn('🔓 ปลดล็อก','QG.adminLogin()','#047857','#fff')+'</div>'+
+  '<div style="display:flex;gap:8px;margin-top:8px">'+admBtn('รีเซ็ตรหัสแอดมิน','QG.adminResetView()')+'</div>'+
   '<div style="font-size:9.5px;color:#94a3b8;margin-top:9px;line-height:1.5">สิทธิ์มีผลเฉพาะใบนี้ '+Math.round(ADM_TTL/60000)+' นาที (หรือจนกด “ล็อก”) · ออกจากใบจะล็อกอัตโนมัติ · รหัสเก็บแบบแฮชในเครื่อง</div>');
  setTimeout(function(){var i=document.getElementById('qgAdmPin');if(i)i.focus()},60);
 }
@@ -10020,7 +10020,7 @@ function adminLogin(){
  var el=document.getElementById('qgAdmPin'),v=el?String(el.value||''):'';
  if(!v)return admLoginView('กรุณากรอกรหัสแอดมิน');
  if(aHash(v,cfg.salt)!==cfg.h)return admLoginView('รหัสไม่ถูกต้อง — ลองอีกครั้ง');
- try{sessionStorage.setItem(ASESS,JSON.stringify({name:cfg.name,exp:Date.now()+ADM_TTL,docId:st.id}))}catch(e){}
+ try{sessionStorage.setItem(ASESS,JSON.stringify({name:cfg.name,exp:Date.now()+ADM_TTL,docId:st.id,pinAt:cfg.at}))}catch(e){}
  adminClose();withScroll(render);toast('ปลดล็อกใบ '+curNo()+' · '+cfg.name+' แล้ว');
 }
 function admSetupView(msg){
@@ -10037,15 +10037,48 @@ function adminSetup(){
  if(!/^\d{4,8}$/.test(p))return admSetupView('รหัสต้องเป็นตัวเลข 4–8 หลัก');
  if(p!==p2)return admSetupView('รหัสยืนยันไม่ตรงกัน');
  var salt=Math.random().toString(36).slice(2,10);
- try{localStorage.setItem(AKEY,JSON.stringify({name:n,salt:salt,h:aHash(p,salt),at:Date.now()}))}catch(e){return admSetupView('บันทึกไม่ได้ (พื้นที่เต็ม)')}
- try{sessionStorage.setItem(ASESS,JSON.stringify({name:n,exp:Date.now()+ADM_TTL,docId:st.id}))}catch(e){}
+ var at=Date.now();
+ try{localStorage.setItem(AKEY,JSON.stringify({name:n,salt:salt,h:aHash(p,salt),at:at}))}catch(e){return admSetupView('บันทึกไม่ได้ (พื้นที่เต็ม)')}
+ try{sessionStorage.setItem(ASESS,JSON.stringify({name:n,exp:Date.now()+ADM_TTL,docId:st.id,pinAt:at}))}catch(e){}
  adminClose();withScroll(render);toast('ตั้งรหัสแอดมินแล้ว · ปลดล็อกเฉพาะใบ '+curNo()+' สำหรับ '+n);
 }
 function admManageView(msg){
  var s=admSess();
  admShell(admHead('ปลดล็อกเฉพาะใบ '+h(curNo())+' · '+h(adminName())+' · หมดอายุ '+new Date(s.exp).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})+' น.<br>ออกจากใบนี้แล้วสิทธิ์จะถูกยกเลิกอัตโนมัติ')+admErr(msg)+
   '<div style="display:flex;gap:8px;margin-top:14px">'+admBtn('🔒 ล็อกใบนี้','QG.lockAdmin()','#0f172a','#fff')+admBtn('เปลี่ยนรหัส','QG.adminChangeView()')+'</div>'+
-  '<div style="display:flex;gap:8px;margin-top:8px">'+admBtn('ปิด','QG.adminClose()')+'</div>');
+  '<div style="display:flex;gap:8px;margin-top:8px">'+admBtn('รีเซ็ตรหัสแอดมิน','QG.adminResetView()')+admBtn('ปิด','QG.adminClose()')+'</div>');
+}
+function admResetView(msg){
+ var cfg=admCfg();if(!cfg)return admSetupView('');
+ admShell(admHead('ตั้งรหัสแอดมินใหม่ — ยืนยันบัญชี Firebase ก่อน')+admErr(msg)+
+  '<label style="display:block;margin-top:12px;font-size:11px;font-weight:700;color:#475569">รหัสผ่านบัญชี Firebase ที่เข้าสู่ระบบ<input id="qgAdmResetPassword" type="password" autocomplete="current-password" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit"></label>'+
+  '<label style="display:block;margin-top:8px;font-size:11px;font-weight:700;color:#475569">รหัสแอดมินใหม่ (ตัวเลข 4–8 หลัก)<input id="qgAdmResetPin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;letter-spacing:4px"></label>'+
+  '<label style="display:block;margin-top:8px;font-size:11px;font-weight:700;color:#475569">ยืนยันรหัสใหม่<input id="qgAdmResetPin2" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;letter-spacing:4px" onkeydown="if(event.key===\'Enter\')QG.adminReset()"></label>'+
+  '<div style="display:flex;gap:8px;margin-top:14px">'+admBtn('ย้อนกลับ','QG.adminPanel()')+admBtn('บันทึกรหัสใหม่','QG.adminReset()','#047857','#fff')+'</div>'+
+  '<button onclick="QG.adminResetDefault()" style="width:100%;margin-top:8px;padding:8px 10px;border-radius:9px;border:1px solid #cbd5e1;background:#fff;color:#475569;font:700 11px Kanit,Tahoma,sans-serif;cursor:pointer">ลบรหัสแอดมินที่ตั้งไว้</button>'+
+  '<div style="font-size:9.5px;color:#64748b;margin-top:9px;line-height:1.5">รหัสแอดมินใหม่จะมีผลกับข้อมูลระบบที่ซิงก์อยู่</div>');
+}
+async function adminReset(){
+ var cfg=admCfg();if(!cfg)return admSetupView('');
+ var password=String((document.getElementById('qgAdmResetPassword')||{}).value||''),n=String((document.getElementById('qgAdmResetPin')||{}).value||''),n2=String((document.getElementById('qgAdmResetPin2')||{}).value||'');
+ if(!password)return admResetView('กรุณากรอกรหัสผ่านบัญชี Firebase ที่เข้าสู่ระบบ');
+ if(!/^\d{4,8}$/.test(n))return admResetView('รหัสใหม่ต้องเป็นตัวเลข 4–8 หลัก');
+ if(n!==n2)return admResetView('รหัสใหม่ยืนยันไม่ตรงกัน');
+ var verifyPassword=window.parent&&window.parent.verifyCurrentFirebasePassword;
+ if(typeof verifyPassword!=='function')return admResetView('Firebase Authentication ยังไม่พร้อมใช้งาน');
+ try{await verifyPassword.call(window.parent,password)}catch(e){
+  var authMessages={'auth/invalid-credential':'รหัสผ่านบัญชีไม่ถูกต้อง','auth/wrong-password':'รหัสผ่านบัญชีไม่ถูกต้อง','auth/too-many-requests':'ยืนยันหลายครั้งเกินไป กรุณารอสักครู่','auth/network-request-failed':'เชื่อมต่อ Firebase ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต'};
+  return admResetView(authMessages[e.code]||(e.code==='auth/user-mismatch'?'บัญชีที่เข้าสู่ระบบไม่ตรงกัน':'ยืนยันบัญชีไม่สำเร็จ: '+(e.message||'กรุณาลองอีกครั้ง')));
+ }
+ var salt=Math.random().toString(36).slice(2,10);
+ try{localStorage.setItem(AKEY,JSON.stringify({name:cfg.name,salt:salt,h:aHash(n,salt),at:Date.now()}))}catch(e){return admResetView('บันทึกไม่ได้ กรุณาตรวจสอบพื้นที่จัดเก็บของเบราว์เซอร์')}
+ clrAdmSess();adminClose();withScroll(render);toast('รีเซ็ตรหัสแอดมินสำเร็จ');
+}
+function adminResetDefault(){
+ if(!admCfg())return admSetupView('');
+ if(!confirm('ลบรหัสแอดมินที่ตั้งไว้หรือไม่? จะต้องตั้งรหัสใหม่ครั้งถัดไป'))return;
+ try{localStorage.removeItem(AKEY)}catch(e){return admResetView('ลบรหัสไม่ได้ กรุณาตรวจสอบพื้นที่จัดเก็บของเบราว์เซอร์')}
+ clrAdmSess();adminClose();withScroll(render);toast('ลบรหัสแอดมินแล้ว · กดปลดล็อกเพื่อตั้งรหัสใหม่');
 }
 function admChangeView(msg){
  admShell(admHead('เปลี่ยนรหัสแอดมิน — ต้องยืนยันรหัสเดิมก่อน')+admErr(msg)+
@@ -10177,24 +10210,29 @@ function safeNum(v){var n=Number(String(v==null?'0':v).replace(/,/g,'').trim());
 function safeAmount(){var n=1;for(var i=0;i<arguments.length;i++)n*=safeNum(arguments[i]);return Number.isFinite(n)?n:0}
 function moneyText(v,suffix){var n=safeNum(v);return n===0?'-':nf(n)+(suffix||'')}
 function priceInput(v){var n=safeNum(v);return n===0?'':String(n)}
-function rowTotal(l){return safeNum(l.price)}
+function laborCalcAmount(l){return safeAmount(l.hours,l.qty,l.price)}
+function rowTotal(l){return safeNum(l.amount==null?laborCalcAmount(l):l.amount)}
 function hoursTotal(d){var s=0;(d.labor||[]).forEach(function(l){s=safeNum(s+safeAmount(l.hours,l.qty))});return s}
 function partQty(p){return p.buyQty===''||p.buyQty==null?safeNum(p.qty):safeNum(p.buyQty)}
-function partAmount(p){return safeNum(p.price)}
+function partCalcAmount(p){return safeAmount(partQty(p),p.price)}
+function partAmount(p){return safeNum(p.amount==null?partCalcAmount(p):p.amount)}
 function totals(d){
  var L=0,P=0,R=0;
  (d.labor||[]).forEach(function(l){var t=rowTotal(l);if(l.appr==='0')R=safeNum(R+t);else L=safeNum(L+t)});
  (d.parts||[]).forEach(function(p){var t=partAmount(p);if(p.appr==='0')R=safeNum(R+t);else P=safeNum(P+t)});
  return {labor:L,parts:P,rej:R,grand:safeNum(L+P)};
 }
-function recalc(){
- var d=cur();if(!d)return;var t=totals(d);
+function recalc(d){
+ d=d||cur();if(!d)return;
+ (d.labor||[]).forEach(function(l){if(!l.amountManual)l.amount=laborCalcAmount(l)});
+ (d.parts||[]).forEach(function(p){if(!p.amountManual)p.amount=partCalcAmount(p)});
+ var t=totals(d);
  var set=function(id,v){var el=document.getElementById(id);if(el)el.textContent=v};
  set('qgTotLabor',nf(t.labor)+' ฿');set('qgTotParts',nf(t.parts)+' ฿');
  set('qgTotAll',nf(t.grand)+' ฿');set('qgTotRej',nf(t.rej)+' ฿');
  set('qgTotHours',nf(hoursTotal(d))+' ชม.');
- (d.labor||[]).forEach(function(l,i){set('qgLabRow'+i,moneyText(rowTotal(l),' ฿'))});
- (d.parts||[]).forEach(function(p,i){set('qgPartRow'+i,moneyText(partAmount(p),' ฿'))});
+ (d.labor||[]).forEach(function(l,i){var el=document.getElementById('qgLabRow'+i);if(el&&!(l.amountManual&&el===document.activeElement))el.value=String(rowTotal(l))});
+ (d.parts||[]).forEach(function(p,i){var el=document.getElementById('qgPartRow'+i);if(el&&!(p.amountManual&&el===document.activeElement))el.value=String(partAmount(p))});
 }
 
 /* ---------- สร้าง/เปิด/ลบ ---------- */
@@ -10354,42 +10392,60 @@ function syncApprovalChecks(rowId,value){
 function repAppr(i,v,checked){var d=cur();if(!d||!d.reported[i])return;d.reported[i].appr=checked?v:(d.reported[i].appr===v?'':'');syncApprovalChecks('qgRepWrap'+i,d.reported[i].appr);put(d,true)}
 function repDel(i){var d=cur();if(!d)return;d.reported.splice(i,1);put(d,true);render()}
 function labAdd(){
- var d=cur(),el=document.getElementById('qgLabNewDesc'),hours=document.getElementById('qgLabNewHours'),qty=document.getElementById('qgLabNewQty'),price=document.getElementById('qgLabNewPrice'),rate=document.getElementById('qgRate'),appr=document.getElementById('qgLabNewAppr'),v=el?el.value.trim():'';
+ var d=cur(),el=document.getElementById('qgLabNewDesc'),hours=document.getElementById('qgLabNewHours'),qty=document.getElementById('qgLabNewQty'),price=document.getElementById('qgLabNewPrice'),amount=document.getElementById('qgLabNewAmount'),rate=document.getElementById('qgRate'),appr=document.getElementById('qgLabNewAppr'),v=el?el.value.trim():'';
  if(!d||!v)return;
- var unitPrice=price&&price.value!==''?safeNum(price.value):safeNum(rate&&rate.value);
- d.labor.push({desc:v,hours:safeNum(hours&&hours.value),qty:safeNum(qty&&qty.value),price:unitPrice,appr:appr?appr.value:''});
+ var unitPrice=price&&price.getAttribute('data-manual')==='1'?safeNum(price.value):safeNum(rate&&rate.value);
+ var hourCount=safeNum(hours&&hours.value),quantity=safeNum(qty&&qty.value),amountManual=!!(amount&&amount.getAttribute('data-manual')==='1');
+ d.labor.push({desc:v,hours:hourCount,qty:quantity,price:unitPrice,amount:amountManual?safeNum(amount&&amount.value):safeAmount(hourCount,quantity,unitPrice),amountManual:amountManual,appr:appr?appr.value:''});
  put(d,true);render();
  [document.getElementById('qgLabNewHours'),document.getElementById('qgLabNewQty'),document.getElementById('qgLabNewPrice')].forEach(function(el){if(el)el.value=''});
+ var clearedPrice=document.getElementById('qgLabNewPrice'),clearedAmount=document.getElementById('qgLabNewAmount');
+ if(clearedPrice)clearedPrice.removeAttribute('data-manual');
+ if(clearedAmount){clearedAmount.value='0';clearedAmount.removeAttribute('data-manual')}
  var clearedAppr=document.getElementById('qgLabNewAppr');if(clearedAppr)clearedAppr.value='';
  labDraftCalc();
  var n=document.getElementById('qgLabNewDesc');if(n)n.focus();
 }
 function labDraftCalc(){
- var hours=document.getElementById('qgLabNewHours'),qty=document.getElementById('qgLabNewQty'),price=document.getElementById('qgLabNewPrice'),rate=document.getElementById('qgRate'),total=document.getElementById('qgLabNewTotal');
- var unitPrice=price&&price.value!==''?safeNum(price.value):safeNum(rate&&rate.value);
- if(total)total.textContent=moneyText(unitPrice,' ฿');
+ var hours=document.getElementById('qgLabNewHours'),qty=document.getElementById('qgLabNewQty'),price=document.getElementById('qgLabNewPrice'),rate=document.getElementById('qgRate'),total=document.getElementById('qgLabNewAmount');
+ if(price&&price.getAttribute('data-manual')!=='1')price.value=String(safeNum(rate&&rate.value));
+ var unitPrice=price?safeNum(price.value):safeNum(rate&&rate.value);
+ if(total&&total.getAttribute('data-manual')!=='1')total.value=String(safeAmount(hours&&hours.value,qty&&qty.value,unitPrice));
 }
-function labSet(i,f,v){var d=cur();if(!d||!d.labor[i])return;d.labor[i][f]=f==='desc'?v:safeNum(v);recalc();scheduleSave(d)}
-function labAppr(i,v,checked){var d=cur();if(!d||!d.labor[i])return;d.labor[i].appr=checked?v:(d.labor[i].appr===v?'':'');syncApprovalChecks('qgLabWrap'+i,d.labor[i].appr);put(d,true);recalc()}
+function labDraftPriceChanged(){var price=document.getElementById('qgLabNewPrice');if(price)price.setAttribute('data-manual','1');labDraftCalc()}
+function labDraftAmountChanged(){var amount=document.getElementById('qgLabNewAmount');if(amount)amount.setAttribute('data-manual','1')}
+function labSet(i,f,v){
+ var d=cur();if(!d||!d.labor[i])return;
+ var row=d.labor[i];
+ if(f==='desc')row.desc=v;
+ else if(f==='amount'){row.amount=safeNum(v);row.amountManual=true}
+ else row[f]=safeNum(v);
+ recalc(d);scheduleSave(d);
+}
+function labAppr(i,v,checked){var d=cur();if(!d||!d.labor[i])return;d.labor[i].appr=checked?v:(d.labor[i].appr===v?'':'');syncApprovalChecks('qgLabWrap'+i,d.labor[i].appr);put(d,true);recalc(d)}
 function labDel(i){var d=cur();if(!d)return;d.labor.splice(i,1);put(d,true);render()}
 function labRate(){
  var d=cur(),r=safeNum((document.getElementById('qgRate')||{}).value);
- if(!d)return;(d.labor||[]).forEach(function(l){l.price=r});put(d,true);recalc();
+ if(!d)return;(d.labor||[]).forEach(function(l){l.price=r});recalc(d);put(d,true);
  toast('ตั้งราคา/หน่วยค่าแรงทุกบรรทัดเป็น '+nf(r)+' บาท');
 }
 function partAdd(){
- var d=cur(),el=document.getElementById('qgPartNewName'),qtyEl=document.getElementById('qgPartNewQty'),buyEl=document.getElementById('qgPartNewBuy'),priceEl=document.getElementById('qgPartNewPrice'),apprEl=document.getElementById('qgPartNewAppr'),v=el?el.value.trim():'';
+ var d=cur(),el=document.getElementById('qgPartNewName'),qtyEl=document.getElementById('qgPartNewQty'),buyEl=document.getElementById('qgPartNewBuy'),priceEl=document.getElementById('qgPartNewPrice'),amountEl=document.getElementById('qgPartNewAmount'),apprEl=document.getElementById('qgPartNewAppr'),v=el?el.value.trim():'';
  if(!d||!v)return;
  var p=findPart(v)||{c:'',n:v,u:'',p:0,st:null};
  if(d.parts.some(function(x){return (p.c&&x.code===p.c)||nm(x.name)===nm(p.n)}))return toast('มีรายการนี้อยู่แล้ว',1);
- var qty=safeNum(qtyEl&&qtyEl.value),stk=(p.st==null?'':p.st);
+ var qty=safeNum(qtyEl&&qtyEl.value),price=priceEl&&priceEl.getAttribute('data-manual')==='1'?safeNum(priceEl.value):safeNum(p.p),amountManual=!!(amountEl&&amountEl.getAttribute('data-manual')==='1'),stk=(p.st==null?'':p.st);
  var buyQty=buyEl&&buyEl.value!==''?safeNum(buyEl.value):(stk===''?'':Math.max(0,qty-safeNum(stk)));
- d.parts.push({code:p.c||'',name:p.n||v,unit:p.u||'',qty:qty,stock:stk,buyQty:buyQty,price:safeNum(priceEl&&priceEl.value),appr:apprEl?apprEl.value:''});
+ d.parts.push({code:p.c||'',name:p.n||v,unit:p.u||'',qty:qty,stock:stk,buyQty:buyQty,price:price,amount:amountManual?safeNum(amountEl&&amountEl.value):safeAmount(buyQty===''?qty:buyQty,price),amountManual:amountManual,appr:apprEl?apprEl.value:''});
  put(d,true);render();
  var clearedName=document.getElementById('qgPartNewName'),clearedStock=document.getElementById('qgPartNewStock'),clearedAppr=document.getElementById('qgPartNewAppr');
- if(clearedName)clearedName.setAttribute('data-code','');
+ if(clearedName){clearedName.value='';clearedName.setAttribute('data-code','')}
  if(clearedStock)clearedStock.value='-';
- [document.getElementById('qgPartNewQty'),document.getElementById('qgPartNewBuy'),document.getElementById('qgPartNewPrice')].forEach(function(el){if(el)el.value=''});
+ var clearedBuy=document.getElementById('qgPartNewBuy');if(clearedBuy){clearedBuy.value='';clearedBuy.removeAttribute('data-manual')}
+ var clearedQty=document.getElementById('qgPartNewQty');if(clearedQty)clearedQty.value='';
+ var clearedPrice=document.getElementById('qgPartNewPrice'),clearedAmount=document.getElementById('qgPartNewAmount');
+ if(clearedPrice){clearedPrice.value='0';clearedPrice.removeAttribute('data-manual')}
+ if(clearedAmount){clearedAmount.value='0';clearedAmount.removeAttribute('data-manual')}
  if(clearedAppr)clearedAppr.value='';
  partDraftCalc();
  var n=document.getElementById('qgPartNewName');if(n)n.focus();
@@ -10399,13 +10455,14 @@ function partDraftLookup(){
  if(!name||!stock||!buy||!price)return;
  var row=findPart(name.value),previousCode=name.getAttribute('data-code')||'';
  if(!row){
- if(previousCode){name.setAttribute('data-code','');stock.value='-';buy.value='';buy.setAttribute('data-manual','');price.value=''}
+ if(previousCode){name.setAttribute('data-code','');stock.value='-';buy.value='';buy.setAttribute('data-manual','');if(price.getAttribute('data-manual')!=='1')price.value='0'}
   partDraftCalc();return
  }
  if(previousCode!==row.c){
   name.setAttribute('data-code',row.c);
   stock.value=row.st==null?'-':safeNum(row.st);
-  price.value=priceInput(row.p);
+  price.value=String(safeNum(row.p));
+  price.removeAttribute('data-manual');
   buy.value=row.st==null?'':Math.max(0,safeNum((document.getElementById('qgPartNewQty')||{}).value)-safeNum(row.st));
   buy.setAttribute('data-manual','');
  }
@@ -10420,14 +10477,21 @@ function partDraftBuyChanged(){
  var buy=document.getElementById('qgPartNewBuy');if(buy)buy.setAttribute('data-manual','1');
  partDraftCalc();
 }
+function partDraftPriceChanged(){var price=document.getElementById('qgPartNewPrice');if(price)price.setAttribute('data-manual','1');partDraftCalc()}
+function partDraftAmountChanged(){var amount=document.getElementById('qgPartNewAmount');if(amount)amount.setAttribute('data-manual','1')}
 function partDraftCalc(){
- var qty=document.getElementById('qgPartNewQty'),buy=document.getElementById('qgPartNewBuy'),price=document.getElementById('qgPartNewPrice'),total=document.getElementById('qgPartNewTotal');
- if(total)total.textContent=moneyText(partAmount({price:price&&price.value}),' ฿');
+ var qty=document.getElementById('qgPartNewQty'),buy=document.getElementById('qgPartNewBuy'),price=document.getElementById('qgPartNewPrice'),amount=document.getElementById('qgPartNewAmount');
+ var purchaseQty=buy&&buy.value!==''?safeNum(buy.value):safeNum(qty&&qty.value);
+ if(amount&&amount.getAttribute('data-manual')!=='1')amount.value=String(safeAmount(purchaseQty,price&&price.value));
 }
 function partSet(i,f,v){
  var d=cur();if(!d||!d.parts[i])return;
- d.parts[i][f]=f==='buyQty'?(v===''?'':safeNum(v)):(f==='qty'||f==='price'?safeNum(v):v);
- recalc();scheduleSave(d);
+ var row=d.parts[i];
+ if(f==='amount'){row.amount=safeNum(v);row.amountManual=true}
+ else if(f==='buyQty')row.buyQty=v===''?'':safeNum(v);
+ else if(f==='qty'||f==='price')row[f]=safeNum(v);
+ else row[f]=v;
+ recalc(d);scheduleSave(d);
 }
 function partNameInput(i,v){
  var d=cur();if(!d||!d.parts[i])return;
@@ -10438,7 +10502,7 @@ function partNameInput(i,v){
   row.price=safeNum(match.p);row.stock=match.st==null?'':match.st;
   row.buyQty=match.st==null?'':Math.max(0,safeNum(row.qty)-safeNum(match.st));
  }
- recalc();scheduleSave(d);
+ recalc(d);scheduleSave(d);
 }
 function partLookup(i,f,v){
  var d=cur();if(!d||!d.parts[i])return;
@@ -10446,16 +10510,16 @@ function partLookup(i,f,v){
  var row=d.parts[i],previousCode=row.code;
  if(!p){
   row[f]=v;row.code='';row.unit='';row.price=0;row.stock='';row.buyQty='';
-  put(d,true);recalc();return
+  recalc(d);put(d,true);return
  }
  row.code=p.c;row.name=p.n;row.unit=p.u||'';
  if(previousCode!==p.c||!safeNum(row.price))row.price=safeNum(p.p);
  row.stock=p.st==null?'':p.st;
  if(previousCode!==p.c||row.buyQty===''||row.buyQty==null)row.buyQty=(p.st==null?'':Math.max(0,safeNum(row.qty)-safeNum(p.st)));
- put(d,true);render();
+ recalc(d);put(d,true);render();
  toast('จับคู่ '+p.n+' · '+p.src+' · คงเหลือ '+nf(p.st)+' · ราคา '+nf(p.p)+' บาท');
 }
-function partAppr(i,v,checked){var d=cur();if(!d||!d.parts[i])return;d.parts[i].appr=checked?v:(d.parts[i].appr===v?'':'');syncApprovalChecks('qgPartWrap'+i,d.parts[i].appr);put(d,true);recalc()}
+function partAppr(i,v,checked){var d=cur();if(!d||!d.parts[i])return;d.parts[i].appr=checked?v:(d.parts[i].appr===v?'':'');syncApprovalChecks('qgPartWrap'+i,d.parts[i].appr);put(d,true);recalc(d)}
 function partDel(i){var d=cur();if(!d)return;d.parts.splice(i,1);put(d,true);render()}
 
 /* ---------- PRINT ---------- */
@@ -10675,7 +10739,7 @@ function renderEditor(){
    '<td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+h(l.hours)+'" oninput="QG.labSet('+i+',\'hours\',this.value)" onchange="QG.labSet('+i+',\'hours\',this.value)" onkeyup="QG.labSet('+i+',\'hours\',this.value)" class="w-16 px-1 py-1 border border-slate-300 rounded-lg text-xs text-center"></td>'+
    '<td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+h(l.qty)+'" oninput="QG.labSet('+i+',\'qty\',this.value)" onchange="QG.labSet('+i+',\'qty\',this.value)" onkeyup="QG.labSet('+i+',\'qty\',this.value)" class="w-16 px-1 py-1 border border-slate-300 rounded-lg text-xs text-center"></td>'+
    '<td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+priceInput(l.price)+'" oninput="QG.labSet('+i+',\'price\',this.value)" onchange="QG.labSet('+i+',\'price\',this.value)" onkeyup="QG.labSet('+i+',\'price\',this.value)" class="w-24 px-1 py-1 border border-slate-300 rounded-lg text-xs text-right"></td>'+
-   '<td id="qgLabRow'+i+'" class="px-2 py-1.5 text-right font-extrabold text-slate-800 whitespace-nowrap">'+moneyText(rowTotal(l),' ฿')+'</td>'+
+   '<td class="px-1 py-1.5"><input id="qgLabRow'+i+'" type="text" inputmode="decimal" value="'+rowTotal(l)+'" oninput="QG.labSet('+i+',\'amount\',this.value)" onchange="QG.labSet('+i+',\'amount\',this.value)" onkeyup="QG.labSet('+i+',\'amount\',this.value)" class="w-24 px-1 py-1 border border-slate-300 rounded-lg text-xs text-right"></td>'+
    '<td class="px-1 py-1.5 text-center"><input type="checkbox" aria-label="อนุมัติรายการแก้ไข '+(i+1)+'" onchange="QG.labAppr('+i+',\'1\',this.checked)"'+(l.appr==='1'?' checked':'')+'></td>'+
    '<td class="px-1 py-1.5 text-center"><input type="checkbox" aria-label="ไม่อนุมัติรายการแก้ไข '+(i+1)+'" onchange="QG.labAppr('+i+',\'0\',this.checked)"'+(l.appr==='0'?' checked':'')+'></td>'+
    '<td class="px-1 py-1.5 text-center"><button type="button" onclick="QG.labDel('+i+')" class="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs" aria-label="ลบรายการแก้ไข"><i class="fa-solid fa-xmark"></i></button></td>'+
@@ -10689,7 +10753,7 @@ function renderEditor(){
    '<td class="px-1 py-1.5 text-center text-xs '+(p.stock!==''&&p.stock!=null&&+p.stock<+(p.qty||0)?'text-red-600 font-bold':'text-slate-600')+'">'+(p.stock===''||p.stock==null?'-':nf(p.stock))+'</td>'+
    '<td class="px-1 py-1.5"><input id="qgBuy'+i+'" type="number" step="any" min="0" value="'+(p.buyQty===''||p.buyQty==null?'':h(p.buyQty))+'" oninput="QG.partSet('+i+',\'buyQty\',this.value)" onchange="QG.partSet('+i+',\'buyQty\',this.value)" onkeyup="QG.partSet('+i+',\'buyQty\',this.value)" class="w-16 px-1 py-1 border border-slate-300 rounded-lg text-xs text-center"></td>'+
    '<td class="px-1 py-1.5"><input type="number" step="any" min="0" value="'+priceInput(p.price)+'" oninput="QG.partSet('+i+',\'price\',this.value)" onchange="QG.partSet('+i+',\'price\',this.value)" onkeyup="QG.partSet('+i+',\'price\',this.value)" class="w-24 px-1 py-1 border border-slate-300 rounded-lg text-xs text-right"></td>'+
-   '<td id="qgPartRow'+i+'" class="px-2 py-1.5 text-right font-extrabold text-slate-800 whitespace-nowrap">'+moneyText(partAmount(p),' ฿')+'</td>'+
+   '<td class="px-1 py-1.5"><input id="qgPartRow'+i+'" type="text" inputmode="decimal" value="'+partAmount(p)+'" oninput="QG.partSet('+i+',\'amount\',this.value)" onchange="QG.partSet('+i+',\'amount\',this.value)" onkeyup="QG.partSet('+i+',\'amount\',this.value)" class="w-24 px-1 py-1 border border-slate-300 rounded-lg text-xs text-right"></td>'+
    '<td class="px-1 py-1.5 text-center"><input type="checkbox" aria-label="อนุมัติรายการอะไหล่ '+(i+1)+'" onchange="QG.partAppr('+i+',\'1\',this.checked)"'+(p.appr==='1'?' checked':'')+'></td>'+
    '<td class="px-1 py-1.5 text-center"><input type="checkbox" aria-label="ไม่อนุมัติรายการอะไหล่ '+(i+1)+'" onchange="QG.partAppr('+i+',\'0\',this.checked)"'+(p.appr==='0'?' checked':'')+'></td>'+
    '<td class="px-1 py-1.5 text-center"><button type="button" onclick="QG.partDel('+i+')" class="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs" aria-label="ลบรายการอะไหล่"><i class="fa-solid fa-xmark"></i></button></td>'+
@@ -10757,8 +10821,8 @@ function renderEditor(){
      '<label class="text-[10px] font-bold text-slate-600 xl:col-span-2">รายการแก้ไข<input id="qgLabNewDesc" list="qgCauseDl" placeholder="พิมพ์งานหรือเลือกสาเหตุการซ่อม" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></label>'+
      '<label class="text-[10px] font-bold text-slate-600">ช.ม. มาตรฐาน<input id="qgLabNewHours" type="number" step="any" min="0" value="1" oninput="QG.labDraftCalc()" onchange="QG.labDraftCalc()" onkeyup="QG.labDraftCalc()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center"></label>'+
      '<label class="text-[10px] font-bold text-slate-600">จำนวน<input id="qgLabNewQty" type="number" step="any" min="0" value="1" oninput="QG.labDraftCalc()" onchange="QG.labDraftCalc()" onkeyup="QG.labDraftCalc()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center"></label>'+
-     '<label class="text-[10px] font-bold text-slate-600">ราคาต่อหน่วย<input id="qgLabNewPrice" type="number" step="any" min="0" oninput="QG.labDraftCalc()" onchange="QG.labDraftCalc()" onkeyup="QG.labDraftCalc()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-right"></label>'+
-     '<label class="text-[10px] font-bold text-slate-600">ยอดรวมพรีวิว<output id="qgLabNewTotal" class="block mt-0.5 px-2 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-extrabold text-right">-</output></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">ราคาต่อหน่วย<input id="qgLabNewPrice" type="number" step="any" min="0" oninput="QG.labDraftPriceChanged()" onchange="QG.labDraftPriceChanged()" onkeyup="QG.labDraftPriceChanged()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-right"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">ราคารวม<input id="qgLabNewAmount" type="text" inputmode="decimal" value="0" oninput="QG.labDraftAmountChanged()" onchange="QG.labDraftAmountChanged()" onkeyup="QG.labDraftAmountChanged()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-right"></label>'+
      '<label class="text-[10px] font-bold text-slate-600">สถานะเริ่มต้น<select id="qgLabNewAppr" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.labAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"><option value="">รออนุมัติ</option><option value="1">อนุมัติ</option><option value="0">ไม่อนุมัติ</option></select></label>'+
      '<button type="button" onclick="QG.labAdd()" class="px-3 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold">+ เพิ่มรายการ</button>'+
     '</div></div>':'')+
@@ -10769,8 +10833,8 @@ function renderEditor(){
      '<label class="text-[10px] font-bold text-slate-600">จำนวนที่เบิกใช้<input id="qgPartNewQty" type="number" step="any" min="0" value="1" oninput="QG.partDraftQtyChanged()" onchange="QG.partDraftQtyChanged()" onkeyup="QG.partDraftQtyChanged()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.partAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center"></label>'+
      '<label class="text-[10px] font-bold text-slate-600">สต็อกคงเหลือ<input id="qgPartNewStock" value="-" readonly tabindex="-1" class="w-full mt-0.5 px-2 py-1.5 border border-slate-200 rounded-lg bg-slate-100 text-xs text-center"></label>'+
      '<label class="text-[10px] font-bold text-slate-600">จำนวนจัดซื้อ<input id="qgPartNewBuy" type="number" step="any" min="0" oninput="QG.partDraftBuyChanged()" onchange="QG.partDraftBuyChanged()" onkeyup="QG.partDraftBuyChanged()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.partAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center"></label>'+
-     '<label class="text-[10px] font-bold text-slate-600">ราคาต่อหน่วย<input id="qgPartNewPrice" type="number" step="any" min="0" oninput="QG.partDraftCalc()" onchange="QG.partDraftCalc()" onkeyup="QG.partDraftCalc()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.partAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-right"></label>'+
-     '<label class="text-[10px] font-bold text-slate-600">ยอดรวมพรีวิว<output id="qgPartNewTotal" class="block mt-0.5 px-2 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-extrabold text-right">-</output></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">ราคาต่อหน่วย<input id="qgPartNewPrice" type="number" step="any" min="0" value="0" oninput="QG.partDraftPriceChanged()" onchange="QG.partDraftPriceChanged()" onkeyup="QG.partDraftPriceChanged()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.partAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-right"></label>'+
+     '<label class="text-[10px] font-bold text-slate-600">ราคารวม (บาท)<input id="qgPartNewAmount" type="text" inputmode="decimal" value="0" oninput="QG.partDraftAmountChanged()" onchange="QG.partDraftAmountChanged()" onkeyup="QG.partDraftAmountChanged()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.partAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-right"></label>'+
      '<label class="text-[10px] font-bold text-slate-600">สถานะเริ่มต้น<select id="qgPartNewAppr" onkeydown="if(event.key===\'Enter\'){event.preventDefault();QG.partAdd()}" class="w-full mt-0.5 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"><option value="">รออนุมัติ</option><option value="1">อนุมัติ</option><option value="0">ไม่อนุมัติ</option></select></label>'+
      '<button type="button" onclick="QG.partAdd()" class="xl:col-span-8 px-3 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold">+ เพิ่มรายการอะไหล่</button>'+
     '</div>'+
@@ -10801,11 +10865,11 @@ function printFrom(id){
 window.QG={render:render,newDoc:newDoc,openDoc:openDoc,back:back,del:del,delCur:delCur,status:setStatus,setStatus:setStatus,set:set,setSign:setSign,custPick:custPick,kind:kind,goView:goView,
  pickJob:pickJob,pullJobItems:pullJobItems,quickFromJob:quickFromJob,
  repAdd:repAdd,repSet:repSet,repQty:repQty,repAppr:repAppr,repDel:repDel,
- labAdd:labAdd,labSet:labSet,labAppr:labAppr,labDel:labDel,labRate:labRate,labDraftCalc:labDraftCalc,
+ labAdd:labAdd,labSet:labSet,labAppr:labAppr,labDel:labDel,labRate:labRate,labDraftCalc:labDraftCalc,labDraftPriceChanged:labDraftPriceChanged,labDraftAmountChanged:labDraftAmountChanged,
  partAdd:partAdd,partSet:partSet,partAppr:partAppr,partDel:partDel,partLookup:partLookup,partNameInput:partNameInput,
- partDraftLookup:partDraftLookup,partDraftQtyChanged:partDraftQtyChanged,partDraftBuyChanged:partDraftBuyChanged,partDraftCalc:partDraftCalc,
+ partDraftLookup:partDraftLookup,partDraftQtyChanged:partDraftQtyChanged,partDraftBuyChanged:partDraftBuyChanged,partDraftPriceChanged:partDraftPriceChanged,partDraftAmountChanged:partDraftAmountChanged,partDraftCalc:partDraftCalc,
  printDoc:printDoc,printFrom:printFrom,saveNow:saveNow,recalc:recalc,
- adminPanel:adminPanel,adminClose:adminClose,adminLogin:adminLogin,adminSetup:adminSetup,adminChangeView:admChangeView,adminChange:adminChange,lockAdmin:lockAdmin};
+ adminPanel:adminPanel,adminClose:adminClose,adminLogin:adminLogin,adminSetup:adminSetup,adminChangeView:admChangeView,adminChange:adminChange,adminResetView:admResetView,adminReset:adminReset,adminResetDefault:adminResetDefault,lockAdmin:lockAdmin};
 
 customers();badge();
 try{if(!document.getElementById('viewQuote').classList.contains('hidden'))render()}catch(e){}
@@ -12670,7 +12734,7 @@ window.addEventListener('storage',function(){if(pane.classList.contains('on'))re
 </script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getDatabase, onDisconnect, onValue, push, ref, remove, serverTimestamp, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -13011,6 +13075,16 @@ function startErpSync() {
 function setAuthError(message) {
   errorBox.textContent = message || "";
 }
+
+window.verifyCurrentFirebasePassword = async function (password) {
+  const user = auth && auth.currentUser;
+  if (!user || !user.email) {
+    const error = new Error("กรุณาเข้าสู่ระบบด้วยบัญชี Email/Password ก่อน");
+    error.code = "auth/no-current-user";
+    throw error;
+  }
+  await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+};
 
 function reportLogError(error) {
   console.error("Firebase access log operation failed", error);
