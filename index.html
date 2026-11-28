@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SMART GARAGE 18W — โปรแกรมเดียว (ไฟล์เดียว แก้โค้ดได้)</title>
-<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--navy:#b91c1c;--navy2:#991b1b;--bg:#fff8f8;--line:#fecaca;--ink:#1e293b;--mut:#64748b;--ok:#16a34a;--warn:#d97706;--bad:#dc2626}
 *{box-sizing:border-box}
 html,body{width:100%;max-width:100%;height:100%;overflow-x:hidden}
-body{margin:0;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Tahoma,"Noto Sans Thai","Leelawadee UI",sans-serif}
+body{margin:0;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--ink);font-family:"Sarabun","Kanit","Noto Sans Thai",Tahoma,sans-serif}
 .hidden{display:none!important}
 header{display:flex;align-items:center;gap:12px;padding:7px 14px;background:linear-gradient(120deg,#dc2626,#b91c1c 60%,#991b1b);color:#fff;box-shadow:0 2px 12px rgba(185,28,28,.25);z-index:6;flex-wrap:wrap;min-height:56px}
 .brand{display:flex;align-items:center;gap:9px;min-width:0}
@@ -180,8 +180,8 @@ body.auth-ok #authScreen{display:none}
 #dashPane .tools2 button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;font:600 12px inherit;cursor:pointer}
 #dashPane .tools2 button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 #dashPane .tools2 input{margin-left:auto;height:32px;border:1px solid var(--line);border-radius:9px;padding:0 10px;font:inherit;font-size:12.5px}
-#dashPane .wk{display:flex;align-items:flex-end;gap:6px;height:80px}
-#dashPane .wk div{flex:1;text-align:center;font-size:10.5px;color:var(--mut)}
+#dashPane .wk{display:flex;align-items:flex-end;gap:6px;height:112px;padding-top:8px}
+#dashPane .wk div{flex:1;text-align:center;font-size:10.5px;color:var(--mut);line-height:1.3}
 #dashPane .wk i{display:block;background:#f87171;border-radius:4px 4px 0 0;margin-bottom:2px}
 #dashPane .pt{font-size:12px;padding:6px 0;border-bottom:1px solid #fee2e2}
 #dashPane .pt small{color:var(--mut)}
@@ -204,10 +204,11 @@ body.auth-ok #authScreen{display:none}
 #gSub button{border:1px solid var(--line);background:#fff5f5;border-radius:9px;padding:6px 14px;font:600 12.5px inherit;cursor:pointer;color:var(--ink)}
 #gSub button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 @media screen{
-  html,body{font-family:"Kanit","Sarabun","Segoe UI",Tahoma,"Noto Sans Thai","Leelawadee UI",sans-serif!important;font-size:14px!important}
+  html,body{font-family:"Sarabun","Kanit","Noto Sans Thai",Tahoma,sans-serif!important;font-size:14px!important}
   body *:not(#font-size-normalize){font-size:14px!important}
-  body *:not(#font-size-normalize):not([class*="fa-"]){font-family:"Kanit","Sarabun","Segoe UI",Tahoma,"Noto Sans Thai","Leelawadee UI",sans-serif!important}
-  body button,body input,body select,body textarea,body table,body th,body td{font-family:"Kanit","Sarabun","Segoe UI",Tahoma,"Noto Sans Thai","Leelawadee UI",sans-serif!important}
+  body *:not(#font-size-normalize):not([class*="fa-"]){font-family:"Sarabun","Kanit","Noto Sans Thai",Tahoma,sans-serif!important}
+  body button,body input,body select,body textarea,body .card,body table,body th,body td{font-family:"Sarabun","Kanit","Noto Sans Thai",Tahoma,sans-serif!important}
+  iframe{font-family:"Sarabun","Kanit","Noto Sans Thai",Tahoma,sans-serif!important}
 }
 @media screen and (max-width:767px){
   body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(#font-size-normalize),
@@ -314,14 +315,14 @@ body.auth-ok #authScreen{display:none}
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Google Fonts: Kanit & Sarabun for clean Thai typography -->
-    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Kanit', 'Sarabun', 'sans-serif'],
+                        sans: ['Sarabun', 'Kanit', 'Noto Sans Thai', 'Tahoma', 'sans-serif'],
                     },
                     colors: {
                         garage: {
@@ -339,7 +340,7 @@ body.auth-ok #authScreen{display:none}
 
     <style>
         body {
-            font-family: 'Kanit', sans-serif;
+            font-family: "Sarabun", "Kanit", "Noto Sans Thai", Tahoma, sans-serif;
             background-color: #fff8f8;
         }
         html, body {
@@ -617,15 +618,16 @@ body.auth-ok #authScreen{display:none}
         @media screen {
             html,
             body {
-                font-family: "Kanit", "Sarabun", "Segoe UI", Tahoma, "Noto Sans Thai", "Leelawadee UI", sans-serif !important;
+                font-family: "Sarabun", "Kanit", "Noto Sans Thai", Tahoma, sans-serif !important;
                 font-size: 14px !important;
             }
             body *:not(#font-size-normalize) {
                 font-size: 14px !important;
             }
             body *:not(#font-size-normalize):not([class*="fa-"]) {
-                font-family: "Kanit", "Sarabun", "Segoe UI", Tahoma, "Noto Sans Thai", "Leelawadee UI", sans-serif !important;
+                font-family: "Sarabun", "Kanit", "Noto Sans Thai", Tahoma, sans-serif !important;
             }
+            body iframe,
             body button,
             body input,
             body select,
@@ -633,7 +635,7 @@ body.auth-ok #authScreen{display:none}
             body table,
             body th,
             body td {
-                font-family: "Kanit", "Sarabun", "Segoe UI", Tahoma, "Noto Sans Thai", "Leelawadee UI", sans-serif !important;
+                font-family: "Sarabun", "Kanit", "Noto Sans Thai", Tahoma, sans-serif !important;
             }
         }
         @media screen and (max-width: 767px) {
@@ -11101,7 +11103,8 @@ window.addEventListener('storage',function(e){
 </script>
 <script type="text/plain" id="srcStore"><!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light"><title>ระบบสโตร์สต็อก EOQ/ROP</title><link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box}html,body{width:100%;max-width:100%;overflow-x:hidden}body{margin:0;font:14px Tahoma,sans-serif;background:#fff8f8;color:#1e293b}
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap");
+*{box-sizing:border-box}html,body{width:100%;max-width:100%;overflow-x:hidden}body{margin:0;font:14px "Sarabun","Kanit","Noto Sans Thai",Tahoma,sans-serif;background:#fff8f8;color:#1e293b}
 header{background:linear-gradient(120deg,#dc2626,#991b1b);color:#fff;padding:12px 18px;font-size:18px;font-weight:bold;box-shadow:0 2px 8px rgba(185,28,28,.18)}
 .store-shell{display:flex;align-items:flex-start;gap:14px;padding:12px;width:100%;min-width:0;max-width:1480px;margin:0 auto}
 nav{display:flex;flex-direction:column;gap:6px;padding:10px;background:#fff;border:1px solid #fecaca;border-radius:12px;width:236px;flex-shrink:0;position:sticky;top:12px;box-shadow:0 2px 8px rgba(185,28,28,.07)}
@@ -11141,10 +11144,10 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,text
 #mc{width:94vw;max-height:calc(100dvh - 16px);overflow:auto;margin:8px auto!important;max-width:none!important}#md{padding:0;overflow-x:hidden;overscroll-behavior:contain}
 .warn{font-size:13px}}
 @media screen{
-html,body{font-family:"Kanit","Sarabun","Segoe UI",Tahoma,"Noto Sans Thai","Leelawadee UI",sans-serif!important;font-size:14px!important}
+html,body{font-family:"Sarabun","Kanit","Noto Sans Thai",Tahoma,sans-serif!important;font-size:14px!important}
 body *:not(#font-size-normalize){font-size:14px!important}
-body *:not(#font-size-normalize):not([class*="fa-"]){font-family:"Kanit","Sarabun","Segoe UI",Tahoma,"Noto Sans Thai","Leelawadee UI",sans-serif!important}
-body button,body input,body select,body textarea,body table,body th,body td{font-family:"Kanit","Sarabun","Segoe UI",Tahoma,"Noto Sans Thai","Leelawadee UI",sans-serif!important}
+body *:not(#font-size-normalize):not([class*="fa-"]){font-family:"Sarabun","Kanit","Noto Sans Thai",Tahoma,sans-serif!important}
+body iframe,body button,body input,body select,body textarea,body .card,body table,body th,body td{font-family:"Sarabun","Kanit","Noto Sans Thai",Tahoma,sans-serif!important}
 }
 @media screen and (max-width:767px){
 body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(#font-size-normalize),body select:not(#font-size-normalize),body textarea:not(#font-size-normalize){font-size:16px!important}
