@@ -7,7 +7,7 @@
 <style>
 :root{--navy:#b91c1c;--navy2:#991b1b;--bg:#fff8f8;--line:#fecaca;--ink:#1e293b;--mut:#64748b;--ok:#16a34a;--warn:#d97706;--bad:#dc2626}
 *{box-sizing:border-box}
-html,body{height:100%}
+html,body{width:100%;max-width:100%;height:100%;overflow-x:hidden}
 body{margin:0;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Tahoma,"Noto Sans Thai","Leelawadee UI",sans-serif}
 .hidden{display:none!important}
 header{display:flex;align-items:center;gap:12px;padding:7px 14px;background:linear-gradient(120deg,#dc2626,#b91c1c 60%,#991b1b);color:#fff;box-shadow:0 2px 12px rgba(185,28,28,.25);z-index:6;flex-wrap:wrap;min-height:56px}
@@ -15,14 +15,15 @@ header{display:flex;align-items:center;gap:12px;padding:7px 14px;background:line
 .logo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#fff;color:#b91c1c;font-size:18px;box-shadow:0 2px 6px rgba(0,0,0,.15)}
 .brand b{font-size:15px;display:block;line-height:1.15;white-space:nowrap;letter-spacing:.2px}
 .brand small{font-size:10.5px;opacity:.72;display:block;white-space:nowrap}
-.switch{display:flex;padding:3px;border-radius:12px;background:#7f1d1d;border:1px solid #ffffff2b;gap:3px;margin:0 auto}
+.switch{display:flex;padding:3px;border-radius:12px;background:#7f1d1d;border:1px solid #ffffff2b;gap:3px;margin:0 auto;min-width:0;max-width:100%}
 .switch button{display:flex;align-items:center;gap:6px;border:0;background:transparent;color:#dbe7f3;font:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:9px;cursor:pointer;white-space:nowrap;transition:.15s}
 .switch button:hover{background:#ffffff10;color:#fff}
 .switch button.on{background:#fff;color:#14395a;box-shadow:0 2px 6px #0003}
 .switch .cnt{min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#ef4444;color:#fff;font-size:10.5px;font-weight:700;display:inline-grid;place-items:center;line-height:1}
 .switch button.on .cnt{background:#dc2626}
 .switch .cnt.hidden{display:none}
-.tools{display:flex;align-items:center;gap:8px}
+.tools{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;flex-wrap:wrap}
+.tools>*{min-width:0}
 .chip{display:flex;align-items:center;gap:7px;height:36px;padding:0 12px;border-radius:10px;border:1px solid #ffffff2b;background:#ffffff14;color:#eaf2fa;font:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap;transition:.15s}
 .chip:hover{background:#ffffff22}
 .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8;flex:none}
@@ -30,8 +31,8 @@ header{display:flex;align-items:center;gap:12px;padding:7px 14px;background:line
 .iconbtn{position:relative;width:38px;height:38px;border-radius:11px;border:1px solid #ffffff2b;background:#ffffff14;color:#fff;font-size:17px;cursor:pointer;display:grid;place-items:center;transition:.15s}
 .iconbtn:hover{background:#ffffff24}
 .iconbtn .badge{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;border-radius:9px;background:#ef4444;color:#fff;font-size:10.5px;font-weight:700;display:grid;place-items:center;padding:0 4px;border:2px solid #14395a}
-main#stage{position:relative;flex:1;min-height:0;background:#fff}
-.frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;display:none}
+main#stage{position:relative;flex:1;min-height:0;min-width:0;width:100%;max-width:100%;overflow:hidden;background:#fff}
+.frame{position:absolute;inset:0;width:100%;max-width:100%;min-width:0;height:100%;border:0;background:#fff;display:none}
 .frame.on{display:block}
 .loadwrap{position:absolute;inset:0;display:none;place-items:center;background:var(--bg);z-index:2}
 .loadwrap.on{display:grid}
@@ -90,8 +91,15 @@ main#stage{position:relative;flex:1;min-height:0;background:#fff}
   .brand small{display:none}
   .switch{order:3;width:100%;margin:0;justify-content:center}
   .switch button{flex:1;justify-content:center;padding:7px 8px;font-size:12.5px}
-  .tools{margin-left:auto}
+  .tools{margin-left:auto;max-width:100%}
   .chip{padding:0 9px}
+}
+@media(max-width:520px){
+  header{gap:6px;padding:7px}
+  .brand{flex:1 1 120px}
+  .tools{flex:1 1 100%;justify-content:flex-start;gap:4px}
+  .switch{flex:1 1 100%}
+  #authIdentity{flex:1 1 72px;max-width:none}
 }
 #authScreen{position:fixed;inset:0;z-index:100;display:grid;place-items:center;overflow:auto;padding:20px;background:linear-gradient(135deg,#fff1f2,#fee2e2)}
 #authCard{width:min(420px,100%);background:#fff;border:1px solid #fecaca;border-radius:18px;padding:26px;box-shadow:0 18px 50px #7f1d1d24}
@@ -123,6 +131,23 @@ body.auth-ok #authScreen{display:none}
 #authHistory th{position:sticky;top:0;background:#fff8f8;color:#64748b;white-space:nowrap}
 #authHistoryEmpty{text-align:center;color:#64748b;padding:24px}
 @media(max-width:860px){#authIdentity{min-width:0}.auth-action{font-size:11px!important;padding:0 8px!important}}
+.sync-mobile-hint{display:none}
+@media(max-width:767px){
+  html,body{overflow-x:hidden}
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea{font-size:16px!important;min-height:44px}
+  .chip{min-height:44px}
+  .iconbtn{width:44px;height:44px}
+  .switch button{min-height:44px}
+  .sync-mobile-hint{display:inline;font-size:11px;font-weight:700}
+  #modal{padding:12px;overflow-y:auto;overscroll-behavior:contain}
+  .mbox{width:min(430px,94vw);max-height:90vh;max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}
+  .mact button{height:44px;min-height:44px}
+  #authHistory{padding:3vw;overflow-y:auto;overscroll-behavior:contain}
+  #authHistoryBox{width:min(900px,94vw);max-height:90vh;max-height:calc(100dvh - 24px)}
+  #authHistoryHead{align-items:flex-start}
+  #authHistory table{width:max-content;min-width:100%}
+  #authHistoryClose,.dhead .x,.dfoot button{min-height:44px}
+}
 </style>
 <style>
 #dashPane{position:absolute;inset:0;display:none;overflow:auto;background:var(--bg);padding:14px;z-index:1}
@@ -143,7 +168,7 @@ body.auth-ok #authScreen{display:none}
 #dashPane .bay small{color:var(--mut);display:block}
 #dashPane .two{grid-template-columns:2fr 1fr}
 @media(max-width:860px){#dashPane .two{grid-template-columns:1fr}}
-#dashPane .tb{overflow:auto}
+#dashPane .tb{width:100%;min-width:0;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
 #dashPane table{width:100%;border-collapse:collapse;font-size:12.5px}
 #dashPane th{text-align:left;color:var(--mut);font-size:11.5px;padding:6px;border-bottom:1px solid var(--line);white-space:nowrap}
 #dashPane td{padding:7px 6px;border-bottom:1px solid #fee2e2;vertical-align:top}
@@ -159,7 +184,7 @@ body.auth-ok #authScreen{display:none}
 #dashPane .wk i{display:block;background:#f87171;border-radius:4px 4px 0 0;margin-bottom:2px}
 #dashPane .pt{font-size:12px;padding:6px 0;border-bottom:1px solid #fee2e2}
 #dashPane .pt small{color:var(--mut)}
-#dashPane .trk{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));margin:12px 0}
+#dashPane .trk{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));margin:12px 0}
 #dashPane .trk .card{padding:12px 12px 10px}
 #dashPane .trk h5{margin:0;font-size:14px;display:flex;justify-content:space-between;gap:8px;align-items:center}
 #dashPane .trk small{color:var(--mut);font-size:11.5px}
@@ -207,8 +232,8 @@ body.auth-ok #authScreen{display:none}
     <button id="tbStore" role="tab" onclick="switchTab('store')">📦 สโตร์<span class="cnt hidden" id="cntStore">0</span></button>
   </nav>
   <div class="tools">
-    <button class="chip" id="syncChip" onclick="syncAll()" title="ซิงก์ข้อมูลอู่และสโตร์ทันที">
-      <span class="dot" id="syncDot"></span><span id="syncTxt">ยังไม่ซิงก์</span>
+    <button class="chip" id="syncChip" onclick="syncAll()" title="ดึงข้อมูลล่าสุดจากอู่และสโตร์ โดยไม่ลบข้อมูลที่บันทึก" aria-label="ดึงข้อมูลล่าสุดจากอู่และสโตร์ โดยไม่ลบข้อมูลที่บันทึก">
+      <span class="dot" id="syncDot"></span><span id="syncTxt">ยังไม่ซิงก์</span><span class="sync-mobile-hint">↻ ดึงล่าสุด</span>
     </button>
     <button class="iconbtn" id="bell" onclick="toggleDrawer()" title="กล่องแจ้งเตือนรวม (ใบเบิก + ของถึงอู่)">
       🔔<span class="badge hidden" id="bellBadge">0</span>
@@ -305,6 +330,51 @@ body.auth-ok #authScreen{display:none}
             font-family: 'Kanit', sans-serif;
             background-color: #fff8f8;
         }
+        html, body {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+        main, #viewQuote, #quoteRoot {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+        }
+        #viewQuote {
+            overflow-x: hidden;
+        }
+        #viewQuote .overflow-x-auto {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            overflow-x: auto;
+            overscroll-behavior-x: contain;
+            -webkit-overflow-scrolling: touch;
+        }
+        #viewQuote table {
+            width: max-content;
+            min-width: 100%;
+        }
+        #viewQuote input,
+        #viewQuote select,
+        #viewQuote textarea {
+            max-width: 100%;
+            min-width: 0;
+        }
+        @media (max-width: 767px) {
+            #viewQuote .grid-cols-2 {
+                grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)) !important;
+            }
+            #viewQuote [style*="grid-template-columns:repeat(3,1fr)"] {
+                grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)) !important;
+            }
+            #viewQuote [style*="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))"] {
+                grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)) !important;
+            }
+            #viewQuote [style*="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))"] {
+                grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)) !important;
+            }
+        }
         /* Tire Button Styling & Tread Pattern */
         .tire-btn {
             position: relative;
@@ -397,8 +467,8 @@ body.auth-ok #authScreen{display:none}
             }
             #tireConfigMode {
                 width: 100%;
-                font-size: 13px !important;
-                min-height: 38px !important;
+                font-size: 16px !important;
+                min-height: 44px !important;
             }
             #stepTireCard .bg-slate-900 {
                 padding: 10px 8px !important;
@@ -421,7 +491,7 @@ body.auth-ok #authScreen{display:none}
             }
             #checklistCategoryPills > button {
                 flex-shrink: 0;
-                min-height: 36px;
+                min-height: 44px;
             }
             /* Smooth touch horizontal scrolling on wide tables */
             table {
@@ -436,11 +506,65 @@ body.auth-ok #authScreen{display:none}
                 min-height: 50px;
                 font-size: 15px !important;
             }
+            button {
+                min-height: 44px;
+            }
+            #tireModal,
+            #jobDetailModal,
+            #excelDataModal,
+            #cloudSyncModal {
+                overflow-y: auto;
+                overscroll-behavior: contain;
+                -webkit-overflow-scrolling: touch;
+            }
             #tireModal > div,
             #jobDetailModal > div,
+            #excelDataModal > div,
             #cloudSyncModal > div {
-                max-height: 94vh;
+                width: 94vw !important;
+                max-width: 94vw !important;
+                max-height: 90vh !important;
+                max-height: calc(100dvh - 24px) !important;
                 border-radius: 16px;
+            }
+            #tireModal > div {
+                display: flex;
+                flex-direction: column;
+            }
+            #tireModal .modal-scroll-body,
+            #jobDetailModalBody,
+            #excelDataModal > div > .overflow-auto,
+            #cloudSyncModal > div > .overflow-y-auto {
+                flex: 1;
+                min-height: 0;
+                max-height: none !important;
+            }
+            #tireModal > div > div:first-child > button,
+            #jobDetailModal > div > div:first-child > button,
+            #excelDataModal > div > div:first-child > button,
+            #cloudSyncModal > div > div:first-child > button {
+                width: 44px !important;
+                height: 44px !important;
+            }
+            #qgAdm > div {
+                padding: 3vw !important;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            #qgAdm > div > div {
+                width: 94vw !important;
+                max-width: 390px !important;
+                max-height: 90vh;
+                max-height: calc(100dvh - 24px);
+                overflow-y: auto;
+                overscroll-behavior: contain;
+            }
+            #qgAdm input {
+                min-height: 44px;
+                font-size: 16px !important;
+            }
+            #qgAdm button {
+                min-height: 44px;
             }
             #toastNotification {
                 left: 12px !important;
@@ -2105,7 +2229,7 @@ body.auth-ok #authScreen{display:none}
             </div>
 
             <!-- Modal Body -->
-            <div class="p-5 space-y-4 max-h-[82vh] overflow-y-auto">
+            <div class="modal-scroll-body p-5 space-y-4 max-h-[82vh] overflow-y-auto">
                 
                 <!-- TREAD DEPTH GAUGE (3 mm Min - 12 mm Max) WITH AUTO ALERT -->
                 <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2.5">
@@ -2266,7 +2390,7 @@ body.auth-ok #authScreen{display:none}
                 </button>
             </div>
 
-            <div id="jobDetailModalBody" class="p-6 overflow-y-auto space-y-5 text-sm">
+            <div id="jobDetailModalBody" class="flex-1 min-h-0 p-6 overflow-y-auto space-y-5 text-sm">
                 <!-- Populated dynamically -->
             </div>
 
@@ -2348,7 +2472,7 @@ body.auth-ok #authScreen{display:none}
                 </button>
             </div>
 
-            <div class="p-5 overflow-y-auto space-y-4 text-xs sm:text-sm text-slate-700">
+            <div class="flex-1 min-h-0 p-5 overflow-y-auto space-y-4 text-xs sm:text-sm text-slate-700">
                 <!-- Method A: Shared Garage Room Code & Auto Cloud Relay -->
                 <div class="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-4 space-y-3">
                     <div class="flex items-center justify-between">
@@ -10928,19 +11052,19 @@ window.addEventListener('storage',function(e){
 </script>
 <script type="text/plain" id="srcStore"><!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light"><title>ระบบสโตร์สต็อก EOQ/ROP</title>
 <style>
-*{box-sizing:border-box}body{margin:0;font:14px Tahoma,sans-serif;background:#fff8f8;color:#1e293b}
+*{box-sizing:border-box}html,body{width:100%;max-width:100%;overflow-x:hidden}body{margin:0;font:14px Tahoma,sans-serif;background:#fff8f8;color:#1e293b}
 header{background:linear-gradient(120deg,#dc2626,#991b1b);color:#fff;padding:12px 18px;font-size:18px;font-weight:bold;box-shadow:0 2px 8px rgba(185,28,28,.18)}
-.store-shell{display:flex;align-items:flex-start;gap:14px;padding:12px;max-width:1480px;margin:0 auto}
+.store-shell{display:flex;align-items:flex-start;gap:14px;padding:12px;width:100%;min-width:0;max-width:1480px;margin:0 auto}
 nav{display:flex;flex-direction:column;gap:6px;padding:10px;background:#fff;border:1px solid #fecaca;border-radius:12px;width:236px;flex-shrink:0;position:sticky;top:12px;box-shadow:0 2px 8px rgba(185,28,28,.07)}
 nav::before{content:'เมนูระบบสโตร์';font-size:11px;font-weight:700;color:#b91c1c;padding:2px 6px 4px;letter-spacing:.03em}
 nav button{border:1px solid #fee2e2;padding:10px 12px;border-radius:8px;background:#fff5f5;cursor:pointer;font:inherit;text-align:left;width:100%;display:flex;align-items:center;gap:8px;font-weight:500;color:#1e293b;white-space:nowrap;transition:background .15s,color .15s,border-color .15s}
 nav button:hover{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
 nav button.on{background:#dc2626;color:#fff;border-color:#dc2626;font-weight:700;box-shadow:0 2px 8px rgba(220,38,38,.28)}
-main{flex:1;min-width:0;padding:0}.card{background:#fff;border-radius:10px;padding:12px;margin-bottom:12px;border:1px solid #fee2e2;box-shadow:0 1px 4px rgba(185,28,28,.06)}
+main{flex:1;width:100%;min-width:0;max-width:100%;padding:0}.card{background:#fff;border-radius:10px;padding:12px;margin-bottom:12px;border:1px solid #fee2e2;box-shadow:0 1px 4px rgba(185,28,28,.06)}
 .kpi{display:flex;gap:10px;flex-wrap:wrap}.kpi div{flex:1;min-width:140px;background:#fef2f2;border-radius:8px;padding:10px;text-align:center}.kpi b{display:block;font-size:24px;color:#b91c1c}
 .warn{background:#fff3cd;border:1px solid #e0a800;padding:8px;border-radius:6px;margin-bottom:10px;color:#8a4b00}
 table{border-collapse:collapse;width:100%;font-size:13px}th{background:#b91c1c;color:#fff;padding:6px;position:sticky;top:0}td{border-bottom:1px solid #e3e3e3;padding:4px 6px}
-.tw{max-height:78vh;overflow:auto}td.n{text-align:right}input,select,button.b{font:inherit;padding:5px;border:1px solid #bbb;border-radius:5px}td input{width:80px;text-align:right}
+.tw{max-width:100%;max-height:78vh;overflow:auto;overscroll-behavior:contain}td.n{text-align:right}input,select,button.b{font:inherit;padding:5px;border:1px solid #bbb;border-radius:5px}td input{width:80px;text-align:right}
 button.b{background:#dc2626;border-color:#b91c1c;color:#fff;cursor:pointer}button.g{background:#eee;color:#222}
 .s-สั่งซื้อ{background:#f8cbad}.s-ใกล้ถึงจุดสั่ง{background:#ffe699}.s-ติดลบ-ตรวจสอบ{background:#d9b3ff}.s-ปกติ{background:#c6e0b4}.s-ไม่เคลื่อนไหว{color:#888}
 .f{display:flex;gap:8px;flex-wrap:wrap;align-items:end}.f label{display:flex;flex-direction:column;font-size:12px;gap:2px}small{color:#666}
@@ -10960,12 +11084,12 @@ body{font-size:15px}header{font-size:16px;padding:10px 12px}
 main{padding:8px}.card{padding:10px}
 .kpi div{min-width:44%}.kpi b{font-size:20px}
 .f{flex-direction:column;align-items:stretch}.f label,.f input,.f select{width:100%!important}.f button{width:100%}
-input,select,button.b{font-size:16px;min-height:40px}td input{width:72px;min-height:34px;font-size:14px}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea,button{font-size:16px;min-height:44px}td input{width:72px;min-height:44px;font-size:16px!important}
 .tw{max-height:70vh;-webkit-overflow-scrolling:touch}table{font-size:12px}
 #tb table td:nth-child(2),#tb table th:nth-child(2){position:sticky;left:0;background:#fff;z-index:1;min-width:130px;box-shadow:2px 0 3px #0002}#tb table th:nth-child(2){background:#b91c1c;z-index:3}
 #m [style*="grid-template-columns"]{grid-template-columns:1fr!important}
 #m [style*="width:220px"]{width:110px!important}
-#mc{margin:8px!important;max-width:none!important}#md{padding:0}
+#mc{width:94vw;max-height:calc(100dvh - 16px);overflow:auto;margin:8px auto!important;max-width:none!important}#md{padding:0;overflow-x:hidden;overscroll-behavior:contain}
 .warn{font-size:13px}}
 </style><script>
 (function(){
