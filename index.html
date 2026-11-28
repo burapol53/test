@@ -10303,7 +10303,7 @@ function setStatus(v){
  if(d.status===v){refreshStatusUI();return}
  d.status=v;put(d);render();
 }
-function saveNow(){flushSave();var d=cur();if(!d)return;put(d);toast('บันทึก '+d.no+' แล้ว')}
+function saveNow(){flushSave();var d=cur();if(!d)return;put(d);toast('บันทึก '+d.no+' แล้ว');clrAdmSess();st.view=st.ret||'summary';st.id='';render();try{window.scrollTo(0,0)}catch(e){}}
 
 /* ---------- ฟิลด์ ---------- */
 function set(f,v){
@@ -11189,7 +11189,9 @@ function calc(){
  info={end,ws}}
 function draw(){const sc=[...document.querySelectorAll('#m .tw')].map(x=>x.scrollTop),sy=scrollY,same=lastT==T;draw0();if(T=='it')tb();if(T=='mm')mmTb();if(T=='gi'||T=='gr')hl();if(same){document.querySelectorAll('#m .tw').forEach((x,i)=>x.scrollTop=sc[i]||0);scrollTo(0,sy)}lastT=T}
 function draw0(){
- $('nav').innerHTML=[['sum','📊 สรุป / ควรสั่งซื้อ'],['mm','📏 Min–Max'],['it','📦 สินค้า'],['gi','➖ เบิกออก (ตัดสต็อก)'],['gr','➕ รับเข้า'],['rq','🧾 ใบเบิกจากอู่'+(window.PGSParts?PGSParts.badgeText():'')],['po','🚚 ใบสั่งซื้อ/แจ้งเตือน'],['cf','⚙️ ตั้งค่า'],['bk','💾 สำรอง/ส่งออก']].map(([k,t])=>`<button class="${T==k?'on':''}" onclick="T='${k}';hf={q:'',d1:'',d2:'',n:200};draw()">${t}</button>`).join('');
+ const rqMeta=window.PGSParts?PGSParts.noticeMeta():{count:0};
+ const rqHtml='<span style="display:flex;align-items:center;gap:6px">🧾 ใบเบิกจากอู่'+(rqMeta.count?'<span style="display:inline-flex;min-width:20px;height:20px;padding:0 6px;align-items:center;justify-content:center;border-radius:999px;background:#dc2626;color:#fff;font-size:11px;font-weight:700">'+rqMeta.count+'</span>':'')+'</span>';
+ $('nav').innerHTML=[['sum','📊 สรุป / ควรสั่งซื้อ'],['mm','📏 Min–Max'],['it','📦 สินค้า'],['gi','➖ เบิกออก (ตัดสต็อก)'],['gr','➕ รับเข้า'],['rq',rqHtml],['po','🚚 ใบสั่งซื้อ/แจ้งเตือน'],['cf','⚙️ ตั้งค่า'],['bk','💾 สำรอง/ส่งออก']].map(([k,t])=>`<button class="${T==k?'on':''}" onclick="T='${k}';hf={q:'',d1:'',d2:'',n:200};draw()">${t}</button>`).join('');
  $('m').innerHTML=(S.cfg.ok?'':'<div class="warn">⚠ ยอดยกมายังเป็นค่าประมาณจากข้อมูล ไม่ใช่ยอดนับจริง — รายการสั่งซื้อยังใช้ตัดสินใจจริงไม่ได้ จนกว่าจะแก้ "ยอดยกมา" ในหน้าสินค้าให้เป็นยอดนับจริง แล้วติ๊กยืนยันในหน้าตั้งค่า</div>')+(T=='po'?'':alBar())+V[T]()}
 const POL={'ไม่มีเบิก':'ไม่มีการเบิกในช่วงประวัติ — ไม่คำนวณ EOQ/ROP','PGS':'คลังเก่า/อุปกรณ์ประจำรถ (ไม่มียอดคงเหลือในบัญชี) — ดูเฉพาะประวัติเบิก ไม่คำนวณ EOQ/ROP','ดีเซล':'บริหารแยก: แผนสั่งซื้อเฉพาะ ระดับบริการสูง',AA:'ควบคุมใกล้ชิด ROP/EOQ เช็คทุกสัปดาห์ บริการ 98% เจรจาราคา',AB:'ROP/EOQ ถ้าเบิกถี่พอ ของแพงเบิกน้อย → สั่งตามงาน/เก็บขั้นต่ำ',AC:'สั่งตามงาน เก็บ 1–2 หน่วย',BA:'ROP/EOQ บริการ 95% เช็ครายเดือน',BB:'Min–Max ตรวจรายเดือน',BC:'สั่งตามต้องการ เก็บขั้นต่ำ',CA:'สั่งทีละมาก ๆ Two-bin/Min–Max (งานเยอะ เงินน้อย)',CB:'Min–Max หรือ Two-bin ไม่ต้องใช้ EOQ',CC:'สั่งเมื่อหมด ไม่ต้องคำนวณ EOQ/ROP พิจารณายุบรหัส'};
 function segTbl(){const o={};rows.forEach(r=>{const s=o[r.seg]=o[r.seg]||{n:0,c:0,f:0};s.n++;s.c+=r.cs;s.f+=r.fr});const nx=rows.filter(r=>!r.x&&!r.it.g),tc=nx.reduce((a,r)=>a+r.cs,0)||1,tf=nx.reduce((a,r)=>a+r.fr,0)||1;
@@ -11473,6 +11475,11 @@ function topic(){return 'https://ntfy.sh/smart_garage_18w_parts_'+roomClean()}
 function vis(o){return Object.values(o||{}).filter(x=>x&&(!x.room||x.room===cfg.room))}
 function pendingCount(){return vis(state.requests).filter(r=>r.status==='pending').length}
 function badgeText(){const n=pendingCount();return n?' ('+n+')':''}
+function noticeMeta(){
+ const requests=vis(state.requests),purchaseNotices=vis(state.notices).filter(n=>n.from==='purchase');
+ const count=requests.filter(r=>r.status==='pending').length+purchaseNotices.filter(n=>n.unreadStore!==false).length;
+ return {count};
+}
 
 function mergeFrom(src){
   let changed=false;
@@ -11941,7 +11948,7 @@ window.addEventListener('focus',function(){imgAsk();imgPoll(false)});
 
 V.rq=storeView;
 window.pgsNotifyPO=notifyPO;
-window.PGSParts={approve:approve,reject:reject,notifyPO:notifyPO,saveCfg:saveCfg,syncNow:syncNow,render:render,badgeText:badgeText,pendingCount:pendingCount,topic:topic,goRq:goRq,ackNotice:ackNotice};
+window.PGSParts={approve:approve,reject:reject,notifyPO:notifyPO,saveCfg:saveCfg,syncNow:syncNow,render:render,badgeText:badgeText,pendingCount:pendingCount,noticeMeta:noticeMeta,topic:topic,goRq:goRq,ackNotice:ackNotice};
 
 window.addEventListener('storage',e=>{if(!e.key||e.key===BUS_KEY||e.key===CFG_KEY)onExternal()});
 document.addEventListener('visibilitychange',function(){if(!document.hidden)relayPoll(false)});
