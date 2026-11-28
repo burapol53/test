@@ -2218,7 +2218,10 @@ body.auth-ok #authScreen{display:none}
                         <span id="pgsCartCount" class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">0 รายการ</span>
                     </div>
                     <div id="pgsCart" class="mt-3 flex-1 min-h-[120px]"></div>
-                    <p class="text-[11px] text-slate-500 mt-2">รายการที่เพิ่มจะแสดงในคำขอเบิกและสามารถตรวจสอบได้ก่อนดำเนินการ</p>
+                    <button id="pgsSubmitBtn" type="button" onclick="PGSParts.submitReq()" disabled aria-disabled="true" class="mt-3 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-paper-plane mr-1"></i>ส่งใบเบิกไปสโตร์
+                    </button>
+                    <p id="pgsSubmitHint" class="text-[11px] text-slate-500 mt-2" role="status" aria-live="polite">เพิ่มรายการอย่างน้อย 1 รายการก่อนส่งใบเบิก</p>
                 </div>
             </div>
 
@@ -9910,7 +9913,12 @@ function removeLine(i){garageCart.splice(i,1);renderCart()}
 function renderCart(){
   const el=document.getElementById('pgsCart'),cnt=document.getElementById('pgsCartCount'),btn=document.getElementById('pgsSubmitBtn');
   if(cnt)cnt.textContent=garageCart.length+' รายการ';
-  if(btn)btn.disabled=!garageCart.length;
+  const hasItems=garageCart.length>0;
+  if(btn){btn.disabled=!hasItems;btn.setAttribute('aria-disabled',String(!hasItems))}
+  const submitHint=document.getElementById('pgsSubmitHint');
+  if(submitHint)submitHint.textContent=hasItems
+    ?'ตรวจสอบรายการและทะเบียนรถให้ครบ จากนั้นกด “ส่งใบเบิกไปสโตร์” เพื่อส่งคำขอและซิงก์ไปยังสโตร์'
+    :'เพิ่มรายการอย่างน้อย 1 รายการก่อนส่งใบเบิก';
   if(!el)return;
   if(!garageCart.length){
     el.innerHTML='<div class="text-xs text-slate-400 bg-slate-50 rounded-xl p-6 text-center border border-dashed border-slate-200">ยังไม่มีรายการ — ค้นหาอะไหล่ด้านซ้ายแล้วกด "เพิ่มเข้าคำขอเบิก"</div>';
