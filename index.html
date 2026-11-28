@@ -10020,6 +10020,16 @@ function admHead(sub){
 function admErr(m){return m?'<div style="margin-top:10px;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:8px;padding:6px 8px;font-size:11px">'+m+'</div>':''}
 function admBtn(label,fn,bg,fg){return '<button onclick="'+fn+'" style="flex:1;padding:9px 10px;border-radius:9px;border:'+(bg?'0':'1px solid #cbd5e1')+';background:'+(bg||'#fff')+';color:'+(fg||'#475569')+';font:700 12px Kanit,Tahoma,sans-serif;cursor:pointer">'+label+'</button>'}
 function curNo(){var d=cur();return d?d.no:st.id}
+function firebaseAdminIn(target){
+ if(typeof target.isCurrentFirebaseAdmin==='function'&&target.isCurrentFirebaseAdmin())return true;
+ var emailEl=target.document.getElementById('authDisplayRole'),email=String(emailEl&&emailEl.textContent||'').trim().toLowerCase();
+ if(!email){var nameEl=target.document.getElementById('authDisplayName');email=String(nameEl&&nameEl.textContent||'').trim().toLowerCase()}
+ return email==='adminpy@pyt.com';
+}
+function isFirebaseAccountAdmin(){
+ return firebaseAdminIn(window)||(window.parent!==window&&firebaseAdminIn(window.parent));
+}
+function requireFirebaseAccountAdmin(){if(isFirebaseAccountAdmin())return true;toast('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่รีเซ็ตรหัสผ่านอนุมัติได้',1);return false}
 function adminPanel(){var cfg=admCfg();if(!st.id)return admDocPickView();if(!cfg)return admSetupView('');if(isAdmin())return admManageView();return admLoginView('')}
 function admDocPickView(){
  admShell(admHead('ปลดล็อกได้ทีละใบงาน — ต้องเปิดใบงาน/ใบเสนอราคาที่ต้องการก่อน')+
@@ -10030,7 +10040,7 @@ function admLoginView(msg){
  admShell(admHead('เฉพาะแอดมินเท่านั้น · ปลดล็อกเฉพาะใบ '+h(curNo())+' ใบนี้')+admErr(msg)+
   '<label style="display:block;margin-top:12px;font-size:11px;font-weight:700;color:#475569">รหัสแอดมิน<input id="qgAdmPin" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;letter-spacing:4px" onkeydown="if(event.key===\'Enter\')QG.adminLogin()"></label>'+
   '<div style="display:flex;gap:8px;margin-top:14px">'+admBtn('ยกเลิก','QG.adminClose()')+admBtn('🔓 ปลดล็อก','QG.adminLogin()','#047857','#fff')+'</div>'+
-  '<div style="display:flex;gap:8px;margin-top:8px">'+admBtn('รีเซ็ตรหัสแอดมิน','QG.adminResetView()')+'</div>'+
+  (isFirebaseAccountAdmin()?'<div style="display:flex;gap:8px;margin-top:8px">'+admBtn('รีเซ็ตรหัสแอดมิน','QG.adminResetView()')+'</div>':'')+
   '<div style="font-size:9.5px;color:#94a3b8;margin-top:9px;line-height:1.5">สิทธิ์มีผลเฉพาะใบนี้ '+Math.round(ADM_TTL/60000)+' นาที (หรือจนกด “ล็อก”) · ออกจากใบจะล็อกอัตโนมัติ · รหัสเก็บแบบแฮชในเครื่อง</div>');
  setTimeout(function(){var i=document.getElementById('qgAdmPin');if(i)i.focus()},60);
 }
@@ -10044,6 +10054,7 @@ function adminLogin(){
  adminClose();withScroll(render);toast('ปลดล็อกใบ '+curNo()+' · '+cfg.name+' แล้ว');
 }
 function admSetupView(msg){
+ if(!requireFirebaseAccountAdmin())return;
  admShell(admHead('ยังไม่มีรหัสแอดมิน — ตั้งรหัสครั้งแรกเพื่อล็อกช่องลงชื่อลูกค้า')+admErr(msg)+
   '<label style="display:block;margin-top:12px;font-size:11px;font-weight:700;color:#475569">ชื่อแอดมิน<input id="qgAdmName" value="ฝ่ายจัดซื้อ" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit"></label>'+
   '<label style="display:block;margin-top:8px;font-size:11px;font-weight:700;color:#475569">รหัสผ่าน (ตัวเลข 4–8 หลัก)<input id="qgAdmPin" type="password" inputmode="numeric" maxlength="8" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;letter-spacing:4px"></label>'+
@@ -10052,6 +10063,7 @@ function admSetupView(msg){
  setTimeout(function(){var i=document.getElementById('qgAdmName');if(i)i.focus()},60);
 }
 function adminSetup(){
+ if(!requireFirebaseAccountAdmin())return;
  var n=String((document.getElementById('qgAdmName')||{}).value||'').trim(),p=String((document.getElementById('qgAdmPin')||{}).value||''),p2=String((document.getElementById('qgAdmPin2')||{}).value||'');
  if(!n)return admSetupView('กรุณากรอกชื่อแอดมิน');
  if(!/^\d{4,8}$/.test(p))return admSetupView('รหัสต้องเป็นตัวเลข 4–8 หลัก');
@@ -10065,42 +10077,41 @@ function adminSetup(){
 function admManageView(msg){
  var s=admSess();
  admShell(admHead('ปลดล็อกเฉพาะใบ '+h(curNo())+' · '+h(adminName())+' · หมดอายุ '+new Date(s.exp).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})+' น.<br>ออกจากใบนี้แล้วสิทธิ์จะถูกยกเลิกอัตโนมัติ')+admErr(msg)+
-  '<div style="display:flex;gap:8px;margin-top:14px">'+admBtn('🔒 ล็อกใบนี้','QG.lockAdmin()','#0f172a','#fff')+admBtn('เปลี่ยนรหัส','QG.adminChangeView()')+'</div>'+
-  '<div style="display:flex;gap:8px;margin-top:8px">'+admBtn('รีเซ็ตรหัสแอดมิน','QG.adminResetView()')+admBtn('ปิด','QG.adminClose()')+'</div>');
+  '<div style="display:flex;gap:8px;margin-top:14px">'+admBtn('🔒 ล็อกใบนี้','QG.lockAdmin()','#0f172a','#fff')+(isFirebaseAccountAdmin()?admBtn('เปลี่ยนรหัส','QG.adminChangeView()'):'')+'</div>'+
+  '<div style="display:flex;gap:8px;margin-top:8px">'+(isFirebaseAccountAdmin()?admBtn('รีเซ็ตรหัสแอดมิน','QG.adminResetView()'):'')+admBtn('ปิด','QG.adminClose()')+'</div>');
 }
 function admResetView(msg){
+ if(!requireFirebaseAccountAdmin())return;
  var cfg=admCfg();if(!cfg)return admSetupView('');
- admShell(admHead('ตั้งรหัสแอดมินใหม่ — ยืนยันบัญชี Firebase ก่อน')+admErr(msg)+
-  '<label style="display:block;margin-top:12px;font-size:11px;font-weight:700;color:#475569">รหัสผ่านบัญชี Firebase ที่เข้าสู่ระบบ<input id="qgAdmResetPassword" type="password" autocomplete="current-password" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit"></label>'+
-  '<label style="display:block;margin-top:8px;font-size:11px;font-weight:700;color:#475569">รหัสแอดมินใหม่ (ตัวเลข 4–8 หลัก)<input id="qgAdmResetPin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;letter-spacing:4px"></label>'+
-  '<label style="display:block;margin-top:8px;font-size:11px;font-weight:700;color:#475569">ยืนยันรหัสใหม่<input id="qgAdmResetPin2" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;letter-spacing:4px" onkeydown="if(event.key===\'Enter\')QG.adminReset()"></label>'+
+ admShell(admHead('ตั้งรหัสแอดมินใหม่ — ใช้ปลดล็อกช่องผู้อนุมัติซ่อม/ลูกค้า')+admErr(msg)+
+  '<label style="display:block;margin-top:12px;font-size:11px;font-weight:700;color:#475569">รหัสแอดมินใหม่ (ตัวเลข 4–8 หลัก)<input id="qgAdmResetPin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;letter-spacing:4px"></label>'+
+  '<label style="display:block;margin-top:8px;font-size:11px;font-weight:700;color:#475569">ยืนยันรหัสแอดมินใหม่<input id="qgAdmResetPin2" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;letter-spacing:4px" onkeydown="if(event.key===\'Enter\')QG.adminReset()"></label>'+
   '<div style="display:flex;gap:8px;margin-top:14px">'+admBtn('ย้อนกลับ','QG.adminPanel()')+admBtn('บันทึกรหัสใหม่','QG.adminReset()','#047857','#fff')+'</div>'+
   '<button onclick="QG.adminResetDefault()" style="width:100%;margin-top:8px;padding:8px 10px;border-radius:9px;border:1px solid #cbd5e1;background:#fff;color:#475569;font:700 11px Kanit,Tahoma,sans-serif;cursor:pointer">ลบรหัสแอดมินที่ตั้งไว้</button>'+
   '<div style="font-size:9.5px;color:#64748b;margin-top:9px;line-height:1.5">รหัสแอดมินใหม่จะมีผลกับข้อมูลระบบที่ซิงก์อยู่</div>');
 }
-async function adminReset(){
+function adminReset(){
+ if(!requireFirebaseAccountAdmin())return;
  var cfg=admCfg();if(!cfg)return admSetupView('');
- var password=String((document.getElementById('qgAdmResetPassword')||{}).value||''),n=String((document.getElementById('qgAdmResetPin')||{}).value||''),n2=String((document.getElementById('qgAdmResetPin2')||{}).value||'');
- if(!password)return admResetView('กรุณากรอกรหัสผ่านบัญชี Firebase ที่เข้าสู่ระบบ');
+ var n=String((document.getElementById('qgAdmResetPin')||{}).value||''),n2=String((document.getElementById('qgAdmResetPin2')||{}).value||'');
  if(!/^\d{4,8}$/.test(n))return admResetView('รหัสใหม่ต้องเป็นตัวเลข 4–8 หลัก');
  if(n!==n2)return admResetView('รหัสใหม่ยืนยันไม่ตรงกัน');
- var verifyPassword=window.parent&&window.parent.verifyCurrentFirebasePassword;
- if(typeof verifyPassword!=='function')return admResetView('Firebase Authentication ยังไม่พร้อมใช้งาน');
- try{await verifyPassword.call(window.parent,password)}catch(e){
-  var authMessages={'auth/invalid-credential':'รหัสผ่านบัญชีไม่ถูกต้อง','auth/wrong-password':'รหัสผ่านบัญชีไม่ถูกต้อง','auth/too-many-requests':'ยืนยันหลายครั้งเกินไป กรุณารอสักครู่','auth/network-request-failed':'เชื่อมต่อ Firebase ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต'};
-  return admResetView(authMessages[e.code]||(e.code==='auth/user-mismatch'?'บัญชีที่เข้าสู่ระบบไม่ตรงกัน':'ยืนยันบัญชีไม่สำเร็จ: '+(e.message||'กรุณาลองอีกครั้ง')));
- }
+ if(!requireFirebaseAccountAdmin())return;
  var salt=Math.random().toString(36).slice(2,10);
- try{localStorage.setItem(AKEY,JSON.stringify({name:cfg.name,salt:salt,h:aHash(n,salt),at:Date.now()}))}catch(e){return admResetView('บันทึกไม่ได้ กรุณาตรวจสอบพื้นที่จัดเก็บของเบราว์เซอร์')}
- clrAdmSess();adminClose();withScroll(render);toast('รีเซ็ตรหัสแอดมินสำเร็จ');
+ var at=Date.now();
+ try{localStorage.setItem(AKEY,JSON.stringify({name:cfg.name,salt:salt,h:aHash(n,salt),at:at}))}catch(e){return admResetView('บันทึกไม่ได้ กรุณาตรวจสอบพื้นที่จัดเก็บของเบราว์เซอร์')}
+ if(typeof window.recordAction==='function')window.recordAction('รีเซ็ตรหัสผ่านอนุมัติสำเร็จ');
+ clrAdmSess();adminClose();withScroll(render);toast('ตั้งรหัสแอดมินใหม่เรียบร้อยแล้ว');
 }
 function adminResetDefault(){
+ if(!requireFirebaseAccountAdmin())return;
  if(!admCfg())return admSetupView('');
  if(!confirm('ลบรหัสแอดมินที่ตั้งไว้หรือไม่? จะต้องตั้งรหัสใหม่ครั้งถัดไป'))return;
  try{localStorage.removeItem(AKEY)}catch(e){return admResetView('ลบรหัสไม่ได้ กรุณาตรวจสอบพื้นที่จัดเก็บของเบราว์เซอร์')}
  clrAdmSess();adminClose();withScroll(render);toast('ลบรหัสแอดมินแล้ว · กดปลดล็อกเพื่อตั้งรหัสใหม่');
 }
 function admChangeView(msg){
+ if(!requireFirebaseAccountAdmin())return;
  admShell(admHead('เปลี่ยนรหัสแอดมิน — ต้องยืนยันรหัสเดิมก่อน')+admErr(msg)+
   '<label style="display:block;margin-top:12px;font-size:11px;font-weight:700;color:#475569">รหัสเดิม<input id="qgAdmOld" type="password" inputmode="numeric" maxlength="8" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;letter-spacing:4px"></label>'+
   '<label style="display:block;margin-top:8px;font-size:11px;font-weight:700;color:#475569">รหัสใหม่ (4–8 หลัก)<input id="qgAdmNew" type="password" inputmode="numeric" maxlength="8" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;letter-spacing:4px"></label>'+
@@ -10108,6 +10119,7 @@ function admChangeView(msg){
   '<div style="display:flex;gap:8px;margin-top:14px">'+admBtn('ย้อนกลับ','QG.adminPanel()')+admBtn('บันทึกรหัสใหม่','QG.adminChange()','#047857','#fff')+'</div>');
 }
 function adminChange(){
+ if(!requireFirebaseAccountAdmin())return;
  var cfg=admCfg();if(!cfg)return admSetupView('');
  var o=String((document.getElementById('qgAdmOld')||{}).value||''),n=String((document.getElementById('qgAdmNew')||{}).value||''),n2=String((document.getElementById('qgAdmNew2')||{}).value||'');
  if(aHash(o,cfg.salt)!==cfg.h)return admChangeView('รหัสเดิมไม่ถูกต้อง');
@@ -12766,8 +12778,8 @@ window.addEventListener('storage',function(){if(pane.classList.contains('on'))re
 </script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, sendPasswordResetEmail, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getDatabase, onDisconnect, onValue, push, ref, remove, serverTimestamp, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { EmailAuthProvider, getAuth, getIdTokenResult, onAuthStateChanged, reauthenticateWithCredential, sendPasswordResetEmail, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getDatabase, onDisconnect, onValue, push, ref, remove, serverTimestamp, set, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
@@ -12793,13 +12805,22 @@ const passwordInput = document.getElementById("authPassword");
 const historyModal = document.getElementById("authHistory");
 let auth = null;
 let db = null;
+let firebaseAdminClaim = false;
+const ADMIN_EMAILS = new Set(["adminpy@pyt.com"]);
+window.isCurrentFirebaseAdmin = function () {
+  const user = auth && auth.currentUser;
+  return !!user && (ADMIN_EMAILS.has(String(user.email || "").toLowerCase()) || firebaseAdminClaim);
+};
 let stopHistoryListener = null;
 let stopOnlineListener = null;
 let stopOnlineConnectionListener = null;
+let stopOnlineClockListener = null;
 let statusTimer = null;
 let onlineSessionRef = null;
-let onlineSessionId = null;
 let onlineLastActiveTimer = null;
+let onlineExpiryTimer = null;
+let onlineServerTimeOffset = 0;
+let onlinePageHidden = false;
 let stopErpListener = null;
 let erpScanTimer = null;
 let erpSyncReady = false;
@@ -12862,6 +12883,10 @@ function stopOnlineTracking() {
     clearInterval(onlineLastActiveTimer);
     onlineLastActiveTimer = null;
   }
+  if (onlineExpiryTimer) {
+    clearTimeout(onlineExpiryTimer);
+    onlineExpiryTimer = null;
+  }
   if (stopOnlineListener) {
     stopOnlineListener();
     stopOnlineListener = null;
@@ -12870,55 +12895,99 @@ function stopOnlineTracking() {
     stopOnlineConnectionListener();
     stopOnlineConnectionListener = null;
   }
+  if (stopOnlineClockListener) {
+    stopOnlineClockListener();
+    stopOnlineClockListener = null;
+  }
   const oldSessionRef = onlineSessionRef;
   onlineSessionRef = null;
-  onlineSessionId = null;
   window.setOnlineUsers([]);
   if (oldSessionRef) {
-    remove(oldSessionRef).catch(reportOnlineError);
+    return remove(oldSessionRef).catch(reportOnlineError);
   }
+  return Promise.resolve();
 }
 
 function startOnlineTracking(user) {
   stopOnlineTracking();
   const sessionId = createOnlineSessionId();
-  const sessionRef = ref(db, ONLINE_USERS_PATH + "/" + sessionId);
+  const sessionRef = ref(db, ONLINE_USERS_PATH + "/" + user.uid + "/" + sessionId);
   onlineSessionRef = sessionRef;
-  onlineSessionId = sessionId;
-  const enteredAt = Date.now();
   let connectionAttempt = 0;
-
   let firstSnapshot = true;
-  let knownSessions = new Set();
-  stopOnlineListener = onValue(ref(db, ONLINE_USERS_PATH), function (snapshot) {
+  let knownUids = new Set();
+  let latestSnapshot = null;
+  function renderActiveUsers() {
+    if (onlineSessionRef !== sessionRef) return;
+    if (onlineExpiryTimer) {
+      clearTimeout(onlineExpiryTimer);
+      onlineExpiryTimer = null;
+    }
+    if (!latestSnapshot) return;
+    const now = Date.now() + onlineServerTimeOffset;
     const users = [];
-    const nextSessions = new Set();
-    snapshot.forEach(function (child) {
-      const record = child.val();
-      if (!record || typeof record !== "object") return;
-      nextSessions.add(child.key);
-      users.push({
-        sessionId: child.key,
-        email: typeof record.email === "string" ? record.email : "",
-        enteredAt: record.enteredAt
-      });
-    });
-    if (!firstSnapshot) {
-      users.forEach(function (onlineUser) {
-        if (onlineUser.sessionId !== onlineSessionId && !knownSessions.has(onlineUser.sessionId)) {
-          showOnlineToast(onlineUser.email);
+    const nextUids = new Set();
+    let nextExpiry = Infinity;
+    latestSnapshot.forEach(function (userSnapshot) {
+      const uid = userSnapshot.key;
+      let activeUser = null;
+      let earliestEntry = Infinity;
+      userSnapshot.forEach(function (sessionSnapshot) {
+        const record = sessionSnapshot.val();
+        if (!record || typeof record !== "object") return;
+        const lastSeen = Number(record.lastSeen);
+        if (!Number.isFinite(lastSeen) || lastSeen <= 0 || now - lastSeen > 90000) return;
+        nextExpiry = Math.min(nextExpiry, lastSeen + 90000);
+        const enteredAt = Number(record.enteredAt) || lastSeen;
+        if (!activeUser || enteredAt < earliestEntry) {
+          activeUser = {
+            uid: uid,
+            email: typeof record.email === "string" ? record.email : "",
+            enteredAt: enteredAt
+          };
+          earliestEntry = enteredAt;
         }
       });
-    }
-    knownSessions = nextSessions;
-    firstSnapshot = false;
+      if (!activeUser) return;
+      nextUids.add(uid);
+      users.push(activeUser);
+      if (!firstSnapshot && !knownUids.has(uid) && uid !== user.uid) {
+        showOnlineToast(activeUser.email);
+      }
+    });
     users.sort(function (a, b) {
       return (Number(a.enteredAt) || 0) - (Number(b.enteredAt) || 0);
     });
+    knownUids = nextUids;
+    firstSnapshot = false;
     window.setOnlineUsers(users);
+    if (Number.isFinite(nextExpiry)) {
+      onlineExpiryTimer = setTimeout(function () {
+        onlineExpiryTimer = null;
+        renderActiveUsers();
+      }, Math.max(1, nextExpiry - now + 1));
+    }
+  }
+
+  stopOnlineListener = onValue(ref(db, ONLINE_USERS_PATH), function (snapshot) {
+    if (onlineSessionRef !== sessionRef) return;
+    latestSnapshot = snapshot;
+    renderActiveUsers();
+  }, function (error) {
+    if (onlineSessionRef !== sessionRef) return;
+    latestSnapshot = null;
+    window.setOnlineUsers([]);
+    reportOnlineError(error);
+  });
+
+  stopOnlineClockListener = onValue(ref(db, ".info/serverTimeOffset"), function (snapshot) {
+    if (onlineSessionRef !== sessionRef) return;
+    onlineServerTimeOffset = Number(snapshot.val()) || 0;
+    renderActiveUsers();
   }, reportOnlineError);
 
   stopOnlineConnectionListener = onValue(ref(db, ".info/connected"), function (snapshot) {
+    if (onlineSessionRef !== sessionRef) return;
     if (snapshot.val() !== true) {
       connectionAttempt++;
       if (onlineLastActiveTimer) {
@@ -12932,26 +13001,37 @@ function startOnlineTracking(user) {
     onDisconnect(sessionRef).remove().then(function () {
       if (onlineSessionRef !== sessionRef || attempt !== connectionAttempt) return;
       return set(sessionRef, {
+        uid: user.uid,
         email: user.email || "",
-        enteredAt: enteredAt,
-        lastActive: serverTimestamp()
+        enteredAt: serverTimestamp(),
+        lastSeen: serverTimestamp()
       });
     }).then(function () {
       if (onlineSessionRef !== sessionRef || attempt !== connectionAttempt) return;
       if (onlineLastActiveTimer) clearInterval(onlineLastActiveTimer);
       onlineLastActiveTimer = setInterval(function () {
         if (onlineSessionRef !== sessionRef) return;
-        set(sessionRef, {
-          email: user.email || "",
-          enteredAt: enteredAt,
-          lastActive: serverTimestamp()
-        }).then(function () {
+        update(sessionRef, { lastSeen: serverTimestamp() }).then(function () {
           if (onlineSessionRef !== sessionRef) return remove(sessionRef);
         }).catch(reportOnlineError);
       }, 30000);
     }).catch(reportOnlineError);
   }, reportOnlineError);
 }
+
+function removeOnlineSessionOnPageExit() {
+  if (onlineSessionRef) remove(onlineSessionRef).catch(reportOnlineError);
+}
+window.addEventListener("beforeunload", removeOnlineSessionOnPageExit);
+window.addEventListener("pagehide", function () {
+  onlinePageHidden = true;
+  removeOnlineSessionOnPageExit();
+});
+window.addEventListener("pageshow", function () {
+  if (!onlinePageHidden) return;
+  onlinePageHidden = false;
+  if (auth && auth.currentUser) startOnlineTracking(auth.currentUser);
+});
 
 async function writeErpValue(key, value) {
   try {
@@ -13295,12 +13375,29 @@ window.logoutUser = async function () {
   const email = auth.currentUser.email;
   window.hideAuthHistory();
   const logged = await recordAction("ออกจากระบบ", email);
+  const sessionRef = onlineSessionRef;
+  if (onlineLastActiveTimer) {
+    clearInterval(onlineLastActiveTimer);
+    onlineLastActiveTimer = null;
+  }
+  onlineSessionRef = null;
+  if (sessionRef) {
+    try {
+      await remove(sessionRef);
+    } catch (error) {
+      reportOnlineError(error);
+      setAuthError("ออกจากระบบไม่สำเร็จ: ลบเซสชันออนไลน์ไม่ได้");
+      if (auth.currentUser) startOnlineTracking(auth.currentUser);
+      return;
+    }
+  }
   try {
     await signOut(auth);
     if (!logged) setAuthError("ออกจากระบบแล้ว แต่บันทึกประวัติไม่สำเร็จ");
   } catch (error) {
     console.error("Firebase sign-out failed", error);
     reportLogError(error);
+    if (auth.currentUser) startOnlineTracking(auth.currentUser);
   }
 };
 
@@ -13324,12 +13421,25 @@ try {
   submitButton.textContent = "เข้าสู่ระบบ";
   resetPasswordButton.disabled = false;
   onAuthStateChanged(auth, function (user) {
+    firebaseAdminClaim = false;
     if (user) {
       showUser(user);
       setAuthError("");
       document.body.classList.add("auth-ok");
       startOnlineTracking(user);
       startErpSync();
+      getIdTokenResult(user).then(function (token) {
+        if (!auth || !auth.currentUser || auth.currentUser.uid !== user.uid) return;
+        const claims = token.claims || {};
+        const role = String(claims.role || "").toLowerCase();
+        const roles = Array.isArray(claims.roles) ? claims.roles.map(function (item) { return String(item).toLowerCase(); }) : [];
+        firebaseAdminClaim = claims.admin === true || claims.isAdmin === true ||
+          role === "admin" || roles.indexOf("admin") !== -1 ||
+          !!(claims.permissions && claims.permissions.admin === true);
+        if (window.QG && typeof window.QG.render === "function") window.QG.render();
+      }).catch(function (error) {
+        console.error("Firebase admin claim check failed", error);
+      });
     } else {
       stopOnlineTracking();
       stopErpSync();
